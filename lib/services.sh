@@ -540,6 +540,20 @@ start_nginx() {
         || return 1
     fi
   done
+  if (( HTTP_PORT < 1024 || HTTPS_PORT < 1024 )); then
+    declare -f has_net_bind_capability >/dev/null 2>&1 || source "$DEV_ROOT/lib/runtime.sh" 2>/dev/null || true
+    if declare -f has_net_bind_capability >/dev/null 2>&1; then
+      if ! has_net_bind_capability "$prefix/sbin/nginx"; then
+        grant_net_bind_capability "$prefix/sbin/nginx" 2>/dev/null || true
+      fi
+      if ! has_net_bind_capability "$prefix/sbin/nginx"; then
+        bad "o nginx precisa de permissão para escutar nas portas $HTTP_PORT e $HTTPS_PORT"
+        hint "execute: sudo setcap 'cap_net_bind_service=+ep' $prefix/sbin/nginx"
+        hint "ou execute: $DEV fix"
+        return 1
+      fi
+    fi
+  fi
   "$prefix/sbin/nginx" -c "$DEV_ETC/nginx/nginx.conf" -p "$prefix" \
     || die "o nginx não subiu; veja $DEV_LOG/nginx-error.log"
 }

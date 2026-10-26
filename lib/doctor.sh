@@ -35,6 +35,20 @@ cmd_doctor() {
   fi
   runtime_line php PHP
   runtime_line nginx nginx
+  if runtime_installed nginx; then
+    local nginx_bin
+    nginx_bin="$(nginx_prefix)/sbin/nginx"
+    if (( HTTP_PORT < 1024 || HTTPS_PORT < 1024 )); then
+      if has_net_bind_capability "$nginx_bin"; then
+        ok "$(printf '%-10s %s' "portas" "permissão 80/443 ativa no nginx")"
+      else
+        warn "$(printf '%-10s %s' "portas" "nginx sem permissão para portas 80/443")"
+        hint "$DEV fix   reaplica permissão no binário"
+        hint "ou execute: sudo setcap 'cap_net_bind_service=+ep' $nginx_bin"
+        problems=$(( problems + 1 ))
+      fi
+    fi
+  fi
   present "MySQL"    "$(mysql_prefix)/bin/mysqld"            "$(config_get MYSQL_VERSION)"
   present "Node"     "$(node_bin 2>/dev/null || true)"       "$(config_get DEFAULT_NODE)"
   present "Mailpit"  "$DEV_RUNTIME/mailpit/bin/mailpit"     "$MAILPIT_VERSION"

@@ -9,6 +9,7 @@ APT_MIN=(
   tar xz-utils unzip
   zstd
   libnss3-tools
+  libcap2-bin
 )
 
 apt_missing() {
@@ -146,6 +147,7 @@ install_own_runtime() {
   local php_version nginx_version
   install_runtime php || return 1
   install_runtime nginx || return 1
+  grant_net_bind_capability || true
   php_version="$(runtime_version php)"
   nginx_version="$(runtime_version nginx)"
   config_set DEFAULT_PHP "$php_version"

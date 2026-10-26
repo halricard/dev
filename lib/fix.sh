@@ -24,6 +24,7 @@ recover_service() {
 cmd_fix() {
   source "$DEV_ROOT/lib/config.sh"
   source "$DEV_ROOT/lib/services.sh"
+  source "$DEV_ROOT/lib/runtime.sh"
   [[ -d "$DEV_RUNTIME" ]] || die "nada instalado ainda — rode $DEV install"
 
   local arg
@@ -37,6 +38,29 @@ cmd_fix() {
   local stopped=0 changed=0 locked=0
 
   step "SERVIÇOS"
+  local nginx_bin
+  nginx_bin="$(nginx_prefix)/sbin/nginx"
+  if [[ -f "$nginx_bin" ]] && (( HTTP_PORT < 1024 || HTTPS_PORT < 1024 )); then
+    if ! has_net_bind_capability "$nginx_bin"; then
+      warn "nginx sem permissão para portas 80/443 (cap_net_bind_service)"
+      if sudo -n setcap 'cap_net_bind_service=+ep' "$nginx_bin" 2>/dev/null; then
+        ok "permissão 80/443 restaurada no nginx"
+        changed=$(( changed + 1 ))
+      elif [[ "${FORCE:-0}" == 1 ]] || confirm "restaurar permissão de porta do nginx com sudo?" s; then
+        if sudo setcap 'cap_net_bind_service=+ep' "$nginx_bin" 2>/dev/null; then
+          ok "permissão 80/443 restaurada no nginx"
+          changed=$(( changed + 1 ))
+        else
+          bad "não foi possível aplicar a permissão no nginx"
+          locked=$(( locked + 1 ))
+        fi
+      else
+        hint "$DEV fix -f   confirma com root e restaura permissão"
+        hint "ou execute: sudo setcap 'cap_net_bind_service=+ep' $nginx_bin"
+        locked=$(( locked + 1 ))
+      fi
+    fi
+  fi
   local services=(nginx mysql mailpit) php_runtime
   php_runtime="$(php_version "")"
   [[ -n "$php_runtime" ]] && services+=("php-fpm-$php_runtime")

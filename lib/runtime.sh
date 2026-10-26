@@ -145,3 +145,55 @@ install_runtime() {
   runtime_sha256 "$component" > "$dir/.installed"
   ok "$component $version"
 }
+
+# Verificação e concessão de capability para portas privilegiadas no nginx.
+has_net_bind_capability() {
+  local target="${1:-}"
+  if [[ -z "$target" ]]; then
+    target="$(runtime_binary nginx 2>/dev/null || true)"
+    if [[ ! -f "$target" && -n "$(nginx_prefix 2>/dev/null || true)" ]]; then
+      target="$(nginx_prefix)/sbin/nginx"
+    fi
+  fi
+  [[ -n "$target" && -f "$target" ]] || return 1
+  command -v getcap >/dev/null 2>&1 || return 1
+  local caps
+  caps="$(getcap "$target" 2>/dev/null || true)"
+  [[ "$caps" == *"cap_net_bind_service"* ]]
+}
+
+grant_net_bind_capability() {
+  local target="${1:-}"
+  local interactive=0
+  if [[ "$target" == "-i" || "$target" == "--interactive" ]]; then
+    interactive=1
+    target=""
+  elif [[ "${2:-}" == "-i" || "${2:-}" == "--interactive" ]]; then
+    interactive=1
+  fi
+
+  if [[ -z "$target" ]]; then
+    target="$(runtime_binary nginx 2>/dev/null || true)"
+    if [[ ! -f "$target" && -n "$(nginx_prefix 2>/dev/null || true)" ]]; then
+      target="$(nginx_prefix)/sbin/nginx"
+    fi
+  fi
+  [[ -n "$target" && -f "$target" ]] || return 1
+  has_net_bind_capability "$target" && return 0
+
+  if command -v setcap >/dev/null 2>&1; then
+    if sudo -n setcap 'cap_net_bind_service=+ep' "$target" 2>/dev/null; then
+      return 0
+    fi
+    if (( interactive )); then
+      if sudo setcap 'cap_net_bind_service=+ep' "$target" 2>/dev/null; then
+        return 0
+      fi
+    fi
+  fi
+
+  if declare -p PENDING >/dev/null 2>&1; then
+    PENDING+=("sudo setcap 'cap_net_bind_service=+ep' $target")
+  fi
+  return 1
+}

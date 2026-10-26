@@ -48,3 +48,23 @@ load helper
   [[ "$status" -eq 0 ]]
   [[ "$output" == "nginx|mysql|mailpit" ]]
 }
+
+@test "start_nginx alerta quando binario nao tem permissao para portas privilegiadas" {
+  run libraries '
+    source "$DEV_ROOT/lib/services.sh"
+    source "$DEV_ROOT/lib/runtime.sh"
+    prefix="$(nginx_prefix)"
+    mkdir -p "$prefix/sbin"
+    touch "$prefix/sbin/nginx"
+    chmod +x "$prefix/sbin/nginx"
+
+    port_busy() { return 1; }
+    has_net_bind_capability() { return 1; }
+    grant_net_bind_capability() { return 1; }
+
+    start_nginx
+  '
+  [[ "$status" -ne 0 ]]
+  [[ "$output" == *"o nginx precisa de permissão para escutar nas portas"* ]]
+  [[ "$output" == *"sudo setcap 'cap_net_bind_service=+ep'"* ]]
+}
