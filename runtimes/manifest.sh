@@ -2,8 +2,8 @@
 # Versões do runtime próprio. Gerado por tools/build-runtimes.sh — não edite à
 # mão: o sha256 aqui é o que o install confere antes de extrair.
 
-PHP_RUNTIME_VERSION="8.5.11"
-PHP_RUNTIME_FILE="php/php-8.5.11-linux-x86_64.tar.xz"
+PHP_RUNTIME_VERSION="8.5.12"
+PHP_RUNTIME_FILE="php/php-8.5.12-linux-x86_64.tar.xz"
 PHP_RUNTIME_SHA256="e5bec4fb337ec0c52c8d5b68ab8a76d51dc9c529b8f32d3be014f5d82da994bb"
 PHP_RUNTIME_URL=""
 # A glibc com que o binário foi linkado. Ele é estático em tudo o mais — OpenSSL,

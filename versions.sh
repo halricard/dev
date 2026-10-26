@@ -9,7 +9,7 @@ DEV_VERSION="0.1.0-dev"
 
 # Binários oficiais e ferramentas utilitárias
 MYSQL_VERSION="8.4.9"        # LTS; https://dev.mysql.com/downloads/mysql/
-NODE_VERSION="24.21.0"       # linha LTS; https://nodejs.org/dist/
+NODE_VERSION="24.22.1"       # linha LTS; https://nodejs.org/dist/
 COMPOSER_VERSION="2.10.3"    # https://getcomposer.org/download/
 MAILPIT_VERSION="1.31.3"     # https://github.com/axllent/mailpit/releases
 ADMINER_VERSION="6.1.1"      # https://github.com/vrana/adminer/releases
