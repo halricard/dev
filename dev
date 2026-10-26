@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+#
+# dev — ambiente de desenvolvimento PHP e Node.js para WSL2 e Linux, sem Docker e modular por plugins.
+#
+# Um despachante e uma biblioteca por assunto em lib/ e plugins/.
+#
+#   dev install                 instala os runtimes estáticos e a pilha base
+#   dev plugin install <app>    instala o suporte para moodle, laravel ou wordpress
+#   dev new <app> <nome>        cria um projeto com a aplicação e o deixa no ar
+#   dev up | down               este projeto no ar, com agenda e workers — e fora
+#   dev start | stop | status
+#   dev fix                     recupera o ambiente meio de pé
+#   dev doctor
+#
+# Nomes em inglês, prosa em português (contrato do CLAUDE.md).
+
+set -euo pipefail
+
+DEV_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+export DEV_ROOT
+
+# shellcheck source=versions.sh
+source "$DEV_ROOT/versions.sh"
+
+if [[ -f "$DEV_ROOT/runtimes/manifest.sh" ]]; then
+  # shellcheck source=/dev/null
+  source "$DEV_ROOT/runtimes/manifest.sh"
+fi
+
+if [[ -f "$DEV_ROOT/lib/common.sh" ]]; then
+  # shellcheck source=lib/common.sh
+  source "$DEV_ROOT/lib/common.sh"
+fi
+
+if [[ -f "$DEV_ROOT/lib/releases.sh" ]]; then
+  # shellcheck source=lib/releases.sh
+  source "$DEV_ROOT/lib/releases.sh"
+fi
+
+if [[ -f "$DEV_ROOT/lib/runtime.sh" ]]; then
+  # shellcheck source=lib/runtime.sh
+  source "$DEV_ROOT/lib/runtime.sh"
+fi
+
+if [[ -f "$DEV_ROOT/lib/plugins.sh" ]]; then
+  # shellcheck source=lib/plugins.sh
+  source "$DEV_ROOT/lib/plugins.sh"
+fi
+
+usage() {
+  cat <<TXT
+
+  ${C_BOLD:-}dev${C_RESET:-}  ${C_DIM:-}ambiente de desenvolvimento PHP e Node.js para WSL2 e Linux, sem Docker${C_RESET:-}
+  ${C_DIM:-}────────────────────────────────────────────────────────────────────────────${C_RESET:-}
+
+  ${C_BOLD:-}AMBIENTE${C_RESET:-}
+    install             instala a pilha base (--plan mostra e não instala)
+    start               sobe os serviços da máquina (-f libera porta ocupada)
+    stop                encerra os serviços da máquina
+    restart             stop e start — aplica conf.d/local.ini editado
+    status              o que está rodando
+    fix                 recupera a máquina meio de pé (-f encerra intrusos)
+    doctor              diagnostica o que costuma quebrar
+    versions            o que está fixado vs. o que foi publicado
+    uninstall           remove o sandbox
+
+  ${C_BOLD:-}PLUGINS${C_RESET:-}
+    plugin list         lista plugins disponíveis e instalados
+    plugin install <n>  instala ferramentas de uma aplicação (wordpress, moodle, laravel)
+    plugin remove <n>   remove o plugin e suas ferramentas adicionais
+
+  ${C_BOLD:-}PROJETO${C_RESET:-}
+    new <app> <nome>    cria um projeto novo já instalado e no ar
+    up                  põe este projeto no ar: banco, vhost, agenda e workers
+    down [nome]         tira do ar; arquivos e banco ficam
+    init                escreve dev.conf num projeto existente
+    destroy <nome>      apaga projeto, banco e snapshots
+    sites               lista o que está sendo servido
+    exec <cmd…>         roda comando com php, node, composer do projeto
+    shell               abre shell com esses mesmos runtimes
+    logs [site]         mostra erros da aplicação e do webserver
+    errors [on|off]     se o erro aparece na tela deste projeto
+    schedule [site]     o que roda de tempos em tempos
+    worker [site]       processos de background contínuos
+    track [caminho]     marca o que vai para o git
+    untrack <caminho>   para de versionar
+    clean [trash]       lista lixo e arquivos temporários; "clean trash" remove
+    snapshot [nome]     salva arquivos e banco num ponto de volta
+    snapshots           lista os pontos salvos
+    restore <nome>      restaura um ponto salvo
+    db query "SQL"      consulta o banco do projeto
+    db export|import    exporta ou importa dump do banco
+    passwd [site]       redefine a senha do admin
+    open [site]         abre o site no navegador
+    open mail           abre o Mailpit (e-mails capturados)
+    open db             abre o Adminer direto no banco do projeto
+    autostart on|off    sobe a pilha no início do sistema
+
+  ${C_BOLD:-}PRIMEIROS PASSOS${C_RESET:-}
+    → dev install
+    → dev plugin install wordpress
+    → dev new wordpress meu-blog
+
+TXT
+}
+
+subcommand="${1:-}"
+export DEV_COMMAND="dev ${subcommand:-}"
+
+if [[ -z "$subcommand" || "$subcommand" == "help" || "$subcommand" == "-h" || "$subcommand" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
+if [[ "$subcommand" == "--version" || "$subcommand" == "-v" ]]; then
+  echo "dev $DEV_VERSION"
+  exit 0
+fi
+
+shift
+
+case "$subcommand" in
+  install|uninstall)
+    source "$DEV_ROOT/lib/install.sh"
+    "cmd_$subcommand" "$@"
+    ;;
+  start|stop|restart|status)
+    source "$DEV_ROOT/lib/services.sh"
+    "cmd_$subcommand" "$@"
+    ;;
+  fix)
+    source "$DEV_ROOT/lib/fix.sh"
+    cmd_fix "$@"
+    ;;
+  doctor)
+    source "$DEV_ROOT/lib/doctor.sh"
+    cmd_doctor "$@"
+    ;;
+  versions)
+    source "$DEV_ROOT/lib/releases.sh"
+    cmd_versions "$@"
+    ;;
+  plugin)
+    source "$DEV_ROOT/lib/plugins.sh"
+    cmd_plugin "$@"
+    ;;
+  new|init|destroy|sites|open)
+    source "$DEV_ROOT/lib/project.sh"
+    "cmd_$subcommand" "$@"
+    ;;
+  up|down)
+    source "$DEV_ROOT/lib/updown.sh"
+    "cmd_$subcommand" "$@"
+    ;;
+  exec|shell)
+    source "$DEV_ROOT/lib/project.sh"
+    "cmd_$subcommand" "$@"
+    ;;
+  logs)
+    source "$DEV_ROOT/lib/logs.sh"
+    cmd_logs "$@"
+    ;;
+  errors)
+    source "$DEV_ROOT/lib/errors.sh"
+    cmd_errors "$@"
+    ;;
+  schedule)
+    source "$DEV_ROOT/lib/schedule.sh"
+    cmd_schedule "$@"
+    ;;
+  worker)
+    source "$DEV_ROOT/lib/workers.sh"
+    cmd_worker "$@"
+    ;;
+  track|untrack)
+    source "$DEV_ROOT/lib/track.sh"
+    "cmd_$subcommand" "$@"
+    ;;
+  clean)
+    source "$DEV_ROOT/lib/clean.sh"
+    cmd_clean "$@"
+    ;;
+  snapshot|snapshots|restore)
+    source "$DEV_ROOT/lib/snapshot.sh"
+    "cmd_$subcommand" "$@"
+    ;;
+  db)
+    source "$DEV_ROOT/lib/snapshot.sh"
+    cmd_db "$@"
+    ;;
+  passwd)
+    source "$DEV_ROOT/lib/passwd.sh"
+    cmd_passwd "$@"
+    ;;
+  autostart)
+    source "$DEV_ROOT/lib/autostart.sh"
+    cmd_autostart "$@"
+    ;;
+  *)
+    echo "comando desconhecido: $subcommand" >&2
+    echo "rode 'dev help' para ver os comandos disponíveis" >&2
+    exit 1
+    ;;
+esac

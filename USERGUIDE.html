@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>dev — Guia do Desenvolvedor</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f8fafc; --fg: #0f172a; --dim: #64748b; --line: #e2e8f0; --card: #ffffff;
+  --code: #f1f5f9; --accent: #2563eb; --accent-soft: #eff6ff;
+  --ok: #16a34a; --warn: #ca8a04; --bad: #dc2626;
+  --term: #0f172a; --termfg: #f8fafc; --t-out: #94a3b8;
+  --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f172a; --fg: #f8fafc; --dim: #94a3b8; --line: #1e293b; --card: #1e293b;
+    --code: #334155; --accent: #60a5fa; --accent-soft: #172554;
+    --ok: #4ade80; --warn: #facc15; --bad: #f87171;
+    --term: #020617; --termfg: #f8fafc; --t-out: #94a3b8;
+    --shadow: none;
+  }
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background: var(--bg); color: var(--fg); line-height: 1.6; margin: 0; padding: 0;
+}
+header {
+  background: var(--card); border-bottom: 1px solid var(--line); padding: 2rem 1.5rem; text-align: center;
+}
+header h1 { margin: 0 0 .5rem; font-size: 2.2rem; color: var(--accent); }
+header p { margin: 0; color: var(--dim); font-size: 1.1rem; }
+main { max-width: 960px; margin: 2rem auto; padding: 0 1.5rem; }
+section {
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 1.5rem 2rem; margin-bottom: 2rem; box-shadow: var(--shadow);
+}
+h2 { color: var(--accent); margin-top: 0; border-bottom: 1px solid var(--line); padding-bottom: .5rem; }
+h3 { margin-top: 1.5rem; }
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: var(--code); padding: .2rem .4rem; border-radius: 4px; font-size: .9em;
+}
+.scope {
+  display: inline-block; font-size: .75rem; font-weight: 700; text-transform: uppercase;
+  padding: .2rem .6rem; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--card); color: var(--dim); margin: 1rem 0 0; line-height: 1.4;
+}
+.scope.machine { color: var(--warn); border-color: var(--warn); }
+.scope.project { color: var(--accent); border-color: var(--accent); }
+.scope + .term { margin-top: .4rem; }
+.term {
+  background: var(--term); color: var(--termfg); border-radius: 8px;
+  padding: 1rem 1.25rem; overflow-x: auto; font-family: monospace;
+  font-size: .9rem; line-height: 1.6; white-space: pre-wrap; margin: .5rem 0 1.5rem;
+}
+.term .pr { color: var(--accent); user-select: none; }
+.term .in { color: #fff; font-weight: bold; }
+.term .out { color: var(--t-out); }
+table {
+  width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .95rem;
+}
+th, td {
+  border: 1px solid var(--line); padding: .65rem .85rem; text-align: left;
+}
+th { background: var(--code); color: var(--fg); font-weight: 600; }
+.pill { display: inline-block; padding: .15rem .45rem; border-radius: 4px; font-size: .8rem; font-weight: 600; }
+.pill.core { background: #dbeafe; color: #1e40af; }
+.pill.plugin { background: #fef3c7; color: #92400e; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>dev</h1>
+  <p>Ambiente de desenvolvimento PHP e Node.js para WSL2 e Linux, sem Docker e modular por plugins.</p>
+</header>
+
+<main>
+
+<section id="visao-geral">
+  <h2>1. Visão Geral e Arquitetura</h2>
+  <p>O <code>dev</code> foi projetado para alta velocidade, determinismo e simplicidade operacional:</p>
+  <ul>
+    <li><b>Core Principal</b>: Instala PHP 8.5 estático, Nginx 1.30 estático, MySQL 8.4 LTS, Node.js LTS, Composer, Mailpit, Adminer e autoridade local mkcert.</li>
+    <li><b>Arquitetura de Plugins</b>: Aplicações pesadas (WordPress, Laravel, Moodle) não poluem o core. Instale incrementalmente apenas o que você precisa.</li>
+    <li><b>Sem Docker nem systemd</b>: Inicialização instantânea em segundos, baixo consumo de memória e supervisão inteligente de portas.</li>
+  </ul>
+</section>
+
+<section id="instalacao">
+  <h2>2. Instalação e Gerenciamento do Ambiente</h2>
+  <p class="scope machine">na máquina</p>
+  <div class="term"><span class="pr">$</span> <span class="in">./dev install</span>
+<span class="out">  ▸ COMPONENTES DO CORE
+  ✔  PHP 8.5.11
+  ✔  nginx 1.30.5
+  ✔  MySQL 8.4.9
+  ✔  Node.js LTS
+  ✔  Composer, Mailpit, Adminer e mkcert
+  ✔  Ambiente pronto em ~/.dev</span></div>
+
+  <p>Comandos úteis para manutenção da máquina:</p>
+  <table>
+    <tr><th>Comando</th><th>Finalidade</th></tr>
+    <tr><td><code>dev install</code></td><td>Instala a pilha base (use <code>--plan</code> para simulação)</td></tr>
+    <tr><td><code>dev start</code></td><td>Inicia os serviços em segundo plano (<code>-f</code> encerra portas ocupadas)</td></tr>
+    <tr><td><code>dev stop</code></td><td>Encerra todos os serviços da máquina</td></tr>
+    <tr><td><code>dev restart</code></td><td>Reinicia o ambiente para recarregar ajustes de configuração</td></tr>
+    <tr><td><code>dev status</code></td><td>Verifica o estado atual dos serviços</td></tr>
+    <tr><td><code>dev doctor</code></td><td>Diagnostica configurações, permissões e rede</td></tr>
+    <tr><td><code>dev fix</code></td><td>Recupera processos travados ou portas conflitantes</td></tr>
+    <tr><td><code>dev versions</code></td><td>Compara versões locais com as fixadas no catálogo</td></tr>
+    <tr><td><code>dev autostart</code></td><td>Configura inicialização automática no boot (<code>on</code>, <code>off</code>, <code>status</code>)</td></tr>
+    <tr><td><code>dev uninstall</code></td><td>Desinstala completamente o sandbox do dev</td></tr>
+  </table>
+</section>
+
+<section id="plugins">
+  <h2>3. Sistema Modular de Plugins</h2>
+  <p>Gerencie o ciclo de vida dos plugins com facilidade:</p>
+  <p class="scope machine">na máquina</p>
+  <div class="term"><span class="pr">$</span> <span class="in">dev plugin list</span>
+<span class="out">  ✔  wordpress      WordPress                instalado
+  ○  laravel        Laravel                  disponível
+  ○  moodle         Moodle                   disponível</span>
+<span class="pr">$</span> <span class="in">dev plugin install moodle</span>
+<span class="out">  ✔  plugin "moodle" instalado com sucesso</span>
+<span class="pr">$</span> <span class="in">dev plugin remove laravel</span>
+<span class="out">  ✔  plugin "laravel" removido com sucesso</span></div>
+</section>
+
+<section id="fluxo-moodle">
+  <h2>4. Guia Rápido: Moodle</h2>
+  <p>Fluxo de trabalho prático do Moodle com layout seguro de diretórios (<code>app/</code> e <code>data/</code>):</p>
+  <p class="scope machine">na máquina</p>
+  <div class="term"><span class="pr">$</span> <span class="in">dev plugin install moodle</span>
+<span class="pr">$</span> <span class="in">dev new moodle meu-ead</span>
+<span class="out">  ✔  Moodle pronto em https://meu-ead.localhost
+  →  docroot meu-ead/app · PHP 8.4</span></div>
+
+  <p class="scope project">no diretório do projeto</p>
+  <div class="term"><span class="pr">$</span> <span class="in">cd meu-ead</span>
+<span class="pr">$</span> <span class="in">dev up</span>
+<span class="out">  ✔  meu-ead servindo https://meu-ead.localhost</span>
+<span class="pr">$</span> <span class="in">dev exec php app/admin/cli/cron.php</span>
+<span class="pr">$</span> <span class="in">dev logs -e</span>
+<span class="pr">$</span> <span class="in">dev down</span></div>
+</section>
+
+<section id="fluxo-laravel">
+  <h2>5. Guia Rápido: Laravel</h2>
+  <p>Criação com suporte automático para migrações, fila em background, Vite e cron:</p>
+  <p class="scope machine">na máquina</p>
+  <div class="term"><span class="pr">$</span> <span class="in">dev plugin install laravel</span>
+<span class="pr">$</span> <span class="in">dev new laravel minha-api</span>
+<span class="out">  ✔  Laravel pronto em https://minha-api.localhost</span></div>
+
+  <p class="scope project">no diretório do projeto</p>
+  <div class="term"><span class="pr">$</span> <span class="in">cd minha-api</span>
+<span class="pr">$</span> <span class="in">dev up</span>
+<span class="out">  ✔  minha-api servindo https://minha-api.localhost
+  ✔  2 worker(s) de pé (queue:listen e npm run dev)</span>
+<span class="pr">$</span> <span class="in">dev exec php artisan migrate</span>
+<span class="pr">$</span> <span class="in">dev worker</span>
+<span class="pr">$</span> <span class="in">dev open mail</span></div>
+</section>
+
+<section id="fluxo-wordpress">
+  <h2>6. Guia Rápido: WordPress</h2>
+  <p>Scaffolding automático com WP-CLI, banco MySQL, chaves criptográficas e wp-cron:</p>
+  <p class="scope machine">na máquina</p>
+  <div class="term"><span class="pr">$</span> <span class="in">dev plugin install wordpress</span>
+<span class="pr">$</span> <span class="in">dev new wordpress meu-site</span>
+<span class="out">  ✔  WordPress pronto em https://meu-site.localhost
+  →  painel em https://meu-site.localhost/wp-admin/</span></div>
+
+  <p class="scope project">no diretório do projeto</p>
+  <div class="term"><span class="pr">$</span> <span class="in">cd meu-site</span>
+<span class="pr">$</span> <span class="in">dev up</span>
+<span class="pr">$</span> <span class="in">dev exec wp plugin list</span>
+<span class="pr">$</span> <span class="in">dev snapshot antes-do-update</span>
+<span class="pr">$</span> <span class="in">dev restore antes-do-update</span></div>
+</section>
+
+<section id="tabela-comandos">
+  <h2>7. Tabela Completa de Comandos do Projeto</h2>
+  <table>
+    <tr><th>Comando</th><th>Onde Rodar</th><th>Descrição</th></tr>
+    <tr><td><code>dev up</code></td><td>Projeto</td><td>Coloca o projeto no ar com banco, vhost, agenda e workers</td></tr>
+    <tr><td><code>dev down</code></td><td>Projeto</td><td>Tira o site do ar preservando arquivos e banco</td></tr>
+    <tr><td><code>dev init</code></td><td>Projeto</td><td>Gera o arquivo <code>dev.conf</code> para um projeto existente</td></tr>
+    <tr><td><code>dev destroy &lt;nome&gt;</code></td><td>Máquina</td><td>Apaga completamente o projeto, banco e snapshots</td></tr>
+    <tr><td><code>dev sites</code></td><td>Máquina</td><td>Lista todos os projetos registrados e seus domínios</td></tr>
+    <tr><td><code>dev exec &lt;cmd&gt;</code></td><td>Projeto</td><td>Executa comando no ambiente isolado (PHP, Node, Composer)</td></tr>
+    <tr><td><code>dev shell</code></td><td>Projeto</td><td>Abre um terminal interativo com as variáveis do projeto</td></tr>
+    <tr><td><code>dev logs</code></td><td>Projeto</td><td>Mostra erros agregados do PHP, webserver e aplicação</td></tr>
+    <tr><td><code>dev errors [on|off]</code></td><td>Projeto</td><td>Alterna a exibição de erros diretamente no navegador</td></tr>
+    <tr><td><code>dev schedule</code></td><td>Projeto</td><td>Lista as tarefas agendadas em execução contínua</td></tr>
+    <tr><td><code>dev worker</code></td><td>Projeto</td><td>Exibe o status dos processos de background (filas, Vite)</td></tr>
+    <tr><td><code>dev track &lt;caminho&gt;</code></td><td>Projeto</td><td>Gera regras do <code>.gitignore</code> para versionar plugins/temas</td></tr>
+    <tr><td><code>dev untrack &lt;caminho&gt;</code></td><td>Projeto</td><td>Remove um caminho do controle de versão do git</td></tr>
+    <tr><td><code>dev clean [trash]</code></td><td>Projeto</td><td>Remove lixo de sincronização e arquivos de sistema do Windows</td></tr>
+    <tr><td><code>dev snapshot [nome]</code></td><td>Projeto</td><td>Cria um ponto de restauração instantâneo de arquivos e banco</td></tr>
+    <tr><td><code>dev snapshots</code></td><td>Máquina</td><td>Lista todos os snapshots criados</td></tr>
+    <tr><td><code>dev restore &lt;nome&gt;</code></td><td>Projeto</td><td>Restaura o estado do projeto para um snapshot anterior</td></tr>
+    <tr><td><code>dev db query &lt;sql&gt;</code></td><td>Projeto</td><td>Executa uma query SQL direta no banco de dados do projeto</td></tr>
+    <tr><td><code>dev db export [arq]</code></td><td>Projeto</td><td>Exporta dump compactado do banco de dados</td></tr>
+    <tr><td><code>dev db import &lt;arq&gt;</code></td><td>Projeto</td><td>Importa um dump SQL para o banco do projeto</td></tr>
+    <tr><td><code>dev passwd</code></td><td>Projeto</td><td>Redefine com segurança a senha do administrador da aplicação</td></tr>
+    <tr><td><code>dev open [mail|db]</code></td><td>Projeto</td><td>Abre o site no navegador, ou as ferramentas Mailpit / Adminer</td></tr>
+  </table>
+</section>
+
+</main>
+
+</body>
+</html>

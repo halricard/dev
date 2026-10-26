@@ -1,0 +1,12 @@
+\-\-plano\b
+\-\-se-preciso\b
+\-\-senha\b
+\b(A|EM|DO|DA|NO|NA|COM|SEM|PARA|POR)_[a-z]
+\b(PADRAO|USUARIO|SENHA|NOME|BANCO|CAMINHO|VERSAO|ARQUIVO|LINHA|TAREFA|LIXO|RAIZ|PASTA|DONO|PORTA)_[A-Z]+\b
+\b(carregar|escrever|subir|parar|exigir|detectar|limpar|contar|achar|usar|servir|matar|adotar|ligar|tirar|recarregar|gerar|emitir|confiar|remover|listar|mostrar|abrir|fechar|criar|garantir|validar|resolver|buscar|perguntar|escolher|sortear|dizer|precisar|devolver|senha|usuario|banco|nome|caminho|versao|arquivo|linha|tarefa|lixo|raiz|pasta|dono|porta|receita|rotulo|relogio|estado)_[a-z]
+\bWDEV_[A-Z]+\b
+\bwdev\.conf\b
+\bwdev\.schedule\b
+\bwdev\.service\b
+\bwdev\.workers\b
+\bPROJ_[A-Z]+\b
