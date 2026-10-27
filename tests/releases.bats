@@ -42,3 +42,14 @@ load helper
   [[ "$status" -eq 0 ]]
   [[ "$output" == "1.30.5" ]]
 }
+
+@test "runtime_version e runtime_file resolvem series parametrizadas de PHP" {
+  run libraries '
+    [ "$(runtime_version php 8.4)" = "8.4.6" ]
+    [ "$(runtime_version php 8.5)" = "8.5.12" ]
+    [ "$(runtime_file php 8.4)" = "php/php-8.4.6-linux-x86_64.tar.xz" ]
+    [ "$(runtime_file php 8.5)" = "php/php-8.5.12-linux-x86_64.tar.xz" ]
+  '
+  [[ "$status" -eq 0 ]]
+}
+

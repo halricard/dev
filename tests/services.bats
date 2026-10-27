@@ -91,8 +91,9 @@ load helper
     mkdir -p "$DEV_RUN"
     echo "$$" > "$(pid_file nginx)"
     port_busy() { return 0; }
-    ss() { printf "LISTEN 0 511 127.0.0.1:80 0.0.0.0:* users:((\"nginx\",pid=%s,fd=6))\n" "$$"; }
+    ss() { printf "State Recv-Q Send-Q Local:Port\nLISTEN 0 511 127.0.0.1:80 0.0.0.0:* users:((\"nginx\",pid=%s,fd=6))\n" "$$"; }
     sudo() { return 1; }
+    master_of() { printf "%s\n" "$1"; }
     port_owner "$HTTP_PORT"
     printf "%s|%s\n" "$OWNER_CLASS" "$OWNER_SERVICE"
   '
@@ -106,7 +107,8 @@ load helper
     mkdir -p "$DEV_RUN"
     echo "$$" > "$(pid_file nginx)"
     port_busy() { [[ "$1" == "$HTTP_PORT" ]]; }
-    ss() { printf "LISTEN 0 511 127.0.0.1:80 0.0.0.0:* users:((\"nginx\",pid=%s,fd=6))\n" "$$"; }
+    ss() { printf "State Recv-Q Send-Q Local:Port\nLISTEN 0 511 127.0.0.1:80 0.0.0.0:* users:((\"nginx\",pid=%s,fd=6))\n" "$$"; }
+    master_of() { printf "%s\n" "$1"; }
     take_over_ports
   '
   [[ "$status" -eq 0 ]]
@@ -130,3 +132,40 @@ load helper
   [[ "$status" -ne 0 ]]
   [[ "$output" == *"porta $HTTP_PORT continua ocupada por custom-proc"* ]]
 }
+
+@test "write_fpm_pools gera configuracao para multiplas versoes ativas de PHP" {
+  run libraries '
+    source "$DEV_ROOT/lib/config.sh"
+    config_set DEFAULT_PHP "8.5.12"
+    mkdir -p "$DEV_SITES" "$BATS_TEST_TMPDIR/moodle-site"
+    printf "PROJECT=\"moodle-site\"\nPHP=\"8.4.6\"\n" > "$BATS_TEST_TMPDIR/moodle-site/dev.conf"
+    printf "%s\n" "$BATS_TEST_TMPDIR/moodle-site" > "$DEV_SITES/moodle-site"
+
+    write_fpm_pools
+
+    [ -f "$DEV_ETC/php/8.5.12/php-fpm.conf" ]
+    [ -f "$DEV_ETC/php/8.4.6/php-fpm.conf" ]
+    grep -q "php-8.5.12.sock" "$DEV_ETC/php/8.5.12/php-fpm.conf"
+    grep -q "php-8.4.6.sock" "$DEV_ETC/php/8.4.6/php-fpm.conf"
+  '
+  [[ "$status" -eq 0 ]]
+}
+
+@test "stop_fpm encerra todos os daemons de versoes ativas" {
+  run libraries '
+    source "$DEV_ROOT/lib/services.sh"
+    mkdir -p "$DEV_RUN"
+    echo "$$" > "$DEV_RUN/php-fpm-8.4.6.pid"
+    echo "$$" > "$DEV_RUN/php-fpm-8.5.12.pid"
+    touch "$DEV_RUN/php-8.4.6.sock" "$DEV_RUN/php-8.5.12.sock"
+    running() { return 0; }
+    kill() { return 0; }
+    cmd_stop
+    [ ! -f "$DEV_RUN/php-8.4.6.sock" ]
+    [ ! -f "$DEV_RUN/php-8.5.12.sock" ]
+  '
+  [[ "$status" -eq 0 ]]
+  [[ "$output" == *"php-fpm 8.4.6"* ]]
+  [[ "$output" == *"php-fpm 8.5.12"* ]]
+}
+

@@ -243,9 +243,8 @@ sendmail_path = "$DEV_RUNTIME/mailpit/bin/mailpit sendmail --smtp-addr 127.0.0.1
 INI
 }
 
-write_fpm_pools() {
-  local version cfg
-  version="$(php_version "")"
+write_fpm_pool_for_version() {
+  local version="$1" cfg
   cfg="$DEV_ETC/php/$version"
   write_php_ini "$version"
   mkdir -p "$cfg"
@@ -276,6 +275,14 @@ clear_env = no
 php_admin_value[error_log] = $DEV_LOG/php-$version.log
 php_admin_flag[log_errors] = on
 CONF
+}
+
+write_fpm_pools() {
+  local ver
+  while IFS= read -r ver; do
+    [[ -n "$ver" ]] || continue
+    write_fpm_pool_for_version "$ver"
+  done < <(active_php_versions)
 }
 
 write_my_cnf() {

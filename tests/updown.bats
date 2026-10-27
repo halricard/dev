@@ -134,3 +134,37 @@ load helper
   [ ! -f "$DEV_HOME/sites/projeto-destroy" ]
   grep -q 'DROP DATABASE IF EXISTS `destroy_db`' "$BATS_TEST_TMPDIR/calls"
 }
+
+@test "ensure_php aceita versao quando binario ja esta instalado" {
+  run libraries '
+    source "$DEV_ROOT/lib/project.sh"
+    mkdir -p "$DEV_RUNTIME/php/8.4.6/bin"
+    touch "$DEV_RUNTIME/php/8.4.6/bin/php"
+    chmod +x "$DEV_RUNTIME/php/8.4.6/bin/php"
+    ensure_php "8.4" "Moodle"
+  '
+  [ "$status" -eq 0 ]
+}
+
+@test "ensure_php com confirmacao do usuario aciona compile_runtime" {
+  run libraries '
+    source "$DEV_ROOT/lib/project.sh"
+    confirm() { return 0; }
+    compile_runtime() { return 0; }
+    ensure_php "8.4" "Moodle"
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"COMPILAÇÃO SOB DEMANDA"* ]]
+  [[ "$output" == *"instalado com sucesso"* ]]
+}
+
+@test "ensure_php com recusa do usuario cancela sem prosseguir" {
+  run libraries '
+    source "$DEV_ROOT/lib/project.sh"
+    confirm() { return 1; }
+    ensure_php "8.4" "Moodle"
+  '
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"criação cancelada: o Moodle requer PHP 8.4"* ]]
+}
+

@@ -131,6 +131,29 @@ php_version() {
   printf '%s\n' "${found:-$wanted}"
 }
 
+active_php_versions() {
+  local versions=()
+  local def
+  def="$(php_version "")"
+  [[ -n "$def" ]] && versions+=("$def")
+
+  if [[ -d "${DEV_SITES:-}" ]]; then
+    local sfile sdir proj_php ver
+    for sfile in "$DEV_SITES"/*; do
+      [[ -f "$sfile" ]] || continue
+      sdir="$(cat "$sfile" 2>/dev/null || true)"
+      if [[ -f "$sdir/dev.conf" ]]; then
+        proj_php="$(grep -oP '^PHP="\K[^"]+' "$sdir/dev.conf" 2>/dev/null || true)"
+        if [[ -n "$proj_php" ]]; then
+          ver="$(php_version "$proj_php")"
+          [[ -n "$ver" ]] && versions+=("$ver")
+        fi
+      fi
+    done
+  fi
+  printf '%s\n' "${versions[@]}" | sort -u || true
+}
+
 php_prefix() { printf '%s\n' "$DEV_RUNTIME/php/$(php_version "${1:-}")"; }
 
 fpm_socket() { printf '%s\n' "$DEV_RUN/php-$1.sock"; }

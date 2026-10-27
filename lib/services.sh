@@ -521,18 +521,32 @@ ensure_mysql_password() {
   fi
 }
 
-start_fpm() {
-  local version service bin
-  version="$(php_version "")"
+start_single_fpm() {
+  local version="$1" service bin
   service="php-fpm-$version"
   running "$service" && return 0
   adopt_orphan "$service" && return 0
-  bin="$(php_prefix)/sbin/php-fpm"
+  bin="$(php_prefix "$version")/sbin/php-fpm"
   [[ -x "$bin" ]] || die "PHP $version não está instalado — rode $DEV install"
   "$bin" --fpm-config "$DEV_ETC/php/$version/php-fpm.conf" -c "$DEV_ETC/php/$version/php.ini" \
     >/dev/null 2>&1 || die "o php-fpm $version não subiu; veja $DEV_LOG/php-fpm-$version.log"
   wait_for_file "$(fpm_socket "$version")" 10 \
     || die "o socket do php-fpm $version não apareceu"
+}
+
+start_fpm() {
+  local target="${1:-}"
+  if [[ -n "$target" ]]; then
+    start_single_fpm "$target"
+    return $?
+  fi
+
+  local ver all_ok=1
+  while IFS= read -r ver; do
+    [[ -n "$ver" ]] || continue
+    start_single_fpm "$ver" || all_ok=0
+  done < <(active_php_versions)
+  (( all_ok ))
 }
 
 start_nginx() {
@@ -621,9 +635,12 @@ cmd_start() {
   done
 
   if (( if_needed )); then
-    local service_ all_up=1
+    local service_ all_up=1 ver_
     for service_ in mysql nginx mailpit; do running "$service_" || all_up=0; done
-    running "php-fpm-$(php_version "")" || all_up=0
+    while IFS= read -r ver_; do
+      [[ -n "$ver_" ]] || continue
+      running "php-fpm-$ver_" || all_up=0
+    done < <(active_php_versions)
     ensure_mysql_password >&2
     (( all_up )) && return 0
 
@@ -646,7 +663,15 @@ cmd_start() {
   step "SUBINDO"
   local failed=0 web=1
   start_mysql   && ok "MySQL     127.0.0.1:$MYSQL_PORT"           || failed=1
-  start_fpm     && ok "php-fpm   $(php_version "")"               || failed=1
+  if start_fpm; then
+    local v_
+    while IFS= read -r v_; do
+      [[ -n "$v_" ]] || continue
+      ok "php-fpm   $v_"
+    done < <(active_php_versions)
+  else
+    failed=1
+  fi
   start_mailpit && ok "Mailpit   https://mail.localhost"          || failed=1
   start_nginx   && ok "nginx     portas $HTTP_PORT e $HTTPS_PORT" || { failed=1; web=0; }
 
@@ -702,14 +727,20 @@ cmd_stop() {
     rm -f "$(pid_file nginx)"
     ok "nginx"
   fi
-  local version service
-  version="$(php_version "")"
-  service="php-fpm-$version"
-  if running "$service"; then
-    kill -QUIT "$(cat "$(pid_file "$service")")" 2>/dev/null || true
-    rm -f "$(pid_file "$service")"
-    ok "php-fpm $version"
-  fi
+  local pidfile service ver
+  for pidfile in "$DEV_RUN"/php-fpm-*.pid; do
+    [[ -f "$pidfile" ]] || continue
+    service="$(basename "$pidfile" .pid)"
+    ver="${service#php-fpm-}"
+    if running "$service"; then
+      kill -QUIT "$(cat "$pidfile")" 2>/dev/null || true
+      rm -f "$pidfile"
+      rm -f "$(fpm_socket "$ver")"
+      ok "php-fpm $ver"
+    else
+      rm -f "$pidfile"
+    fi
+  done
   if running mysql; then
     MYSQL_PWD="$(config_get MYSQL_PASSWORD)" \
       "$(mysql_prefix)/bin/mysqladmin" --socket="$DEV_RUN/mysql.sock" \
@@ -759,10 +790,12 @@ cmd_status() {
   label "nginx" "$(config_get NGINX_VERSION)"
 
   step "SERVIÇOS"
-  local version
-  version="$(php_version "")"
   service_state nginx   "portas $HTTP_PORT e $HTTPS_PORT"
-  service_state "php-fpm-$version" "socket $(fpm_socket "$version")"
+  local ver_stat
+  while IFS= read -r ver_stat; do
+    [[ -n "$ver_stat" ]] || continue
+    service_state "php-fpm-$ver_stat" "socket $(fpm_socket "$ver_stat")"
+  done < <(active_php_versions)
   service_state mysql   "127.0.0.1:$MYSQL_PORT"
   service_state mailpit "smtp 127.0.0.1:$SMTP_PORT"
 

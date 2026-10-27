@@ -126,17 +126,47 @@ series_of() { printf '%s\n' "${1%.*}"; }
 ensure_php() {
   local series="$1" title="$2" found installed installed_series
   found="$(php_version "$series")"
-  [[ -x "$DEV_RUNTIME/php/$found/bin/php" ]] && return 0
+  if [[ -x "$DEV_RUNTIME/php/$found/bin/php" ]]; then
+    return 0
+  fi
+
+  declare -F compile_runtime >/dev/null || source "$DEV_ROOT/lib/runtime.sh" 2>/dev/null || true
+
+  # Se o tarball já estiver presente em runtimes/php/, apenas extrai
+  local local_tarball=""
+  if declare -F runtime_local_tarball >/dev/null; then
+    local_tarball="$(runtime_local_tarball php "$series" 2>/dev/null || true)"
+  fi
+  if [[ -n "$local_tarball" && -f "$local_tarball" ]]; then
+    info "instalando PHP $series a partir de runtimes/php/"
+    if install_runtime php "$series"; then
+      return 0
+    fi
+  fi
 
   installed="$(php_installed_version)"
   installed_series="$(series_of "$installed")"
   blank
-  warn "o $title pede PHP $series, mas este dev tem $installed_series"
+  warn "o $title pede PHP $series, mas este dev ainda não tem esta versão"
   hint "PHP instalado: ${installed:-nenhum}"
+  blank
+
+  if confirm "Deseja compilar o PHP $series a partir do fonte oficial agora?" s; then
+    blank
+    step "COMPILAÇÃO SOB DEMANDA: PHP $series"
+    if compile_runtime php "$series"; then
+      ok "PHP $series instalado com sucesso"
+      return 0
+    else
+      bad "falha ao compilar o PHP $series"
+      return 1
+    fi
+  fi
+
+  blank
+  warn "criação cancelada: o $title requer PHP $series"
   if [[ -n "$installed_series" ]]; then
-    hint "defina PHP=\"$installed_series\" no dev.conf"
-  else
-    hint "rode:  $DEV install"
+    hint "para usar a versão já instalada por sua conta e risco: use --php $installed_series"
   fi
   blank
   return 1

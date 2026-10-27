@@ -76,3 +76,31 @@ setup() {
     [[ "$agenda" == *"60 php app/admin/cli/cron.php"* ]]
   '
 }
+
+@test "cmd_new com receita moodle aciona ensure_php com versao 8.4 e configura vhost 8.4" {
+  mkdir -p "$DEV_PLUGINS/installed/moodle"
+  IGNORE="services.sh" run in_project '
+    source "$DEV_ROOT/lib/project.sh"
+    cmd_start() { return 0; }
+    running() { return 0; }
+    create_database() { :; }
+    recipe_install() { :; }
+    serve_project() { :; }
+    cmd_open() { :; }
+    confirm() { return 0; }
+    compile_runtime() {
+      mkdir -p "$DEV_RUNTIME/php/8.4.6/bin"
+      touch "$DEV_RUNTIME/php/8.4.6/bin/php"
+      chmod +x "$DEV_RUNTIME/php/8.4.6/bin/php"
+      return 0
+    }
+
+    cmd_new moodle meu-moodle
+    test -f "$PWD/meu-moodle/dev.conf"
+    grep -q "PHP=\"8.4\"" "$PWD/meu-moodle/dev.conf"
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"COMPILAÇÃO SOB DEMANDA: PHP 8.4"* ]]
+  [[ "$output" == *"CRIANDO PROJETO meu-moodle (moodle)"* ]]
+}
+
