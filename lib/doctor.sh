@@ -50,6 +50,19 @@ cmd_doctor() {
     fi
   fi
   present "MySQL"    "$(mysql_prefix)/bin/mysqld"            "$(config_get MYSQL_VERSION)"
+  local mysql_cli_bin
+  mysql_cli_bin="$(mysql_prefix)/bin/mysql"
+  if [[ -f "$mysql_cli_bin" ]]; then
+    sandbox_libs
+    if "$mysql_cli_bin" --version >/dev/null 2>&1; then
+      ok "$(printf '%-10s %s' "mysql-cli" "cliente operacional")"
+    else
+      warn "$(printf '%-10s %s' "mysql-cli" "cliente com bibliotecas ausentes")"
+      hint "$DEV fix   repara links de compatibilidade em lib-compat"
+      hint "ou instale: sudo apt install libncurses6"
+      problems=$(( problems + 1 ))
+    fi
+  fi
   present "Node"     "$(node_bin 2>/dev/null || true)"       "$(config_get DEFAULT_NODE)"
   present "Mailpit"  "$DEV_RUNTIME/mailpit/bin/mailpit"     "$MAILPIT_VERSION"
   present "Adminer"  "$DEV_HOME/adminer/adminer.php"        "$ADMINER_VERSION"

@@ -28,6 +28,77 @@ load helper
   [[ "$status" -eq 0 ]]
 }
 
+@test "APT_MIN inclui libncurses6" {
+  run libraries '
+    source "$DEV_ROOT/lib/install.sh"
+    printf "%s\n" "${APT_MIN[@]}" | grep -x "libncurses6"
+  '
+  [[ "$status" -eq 0 ]]
+}
+
+@test "compatibilize_libs cria symlinks para dependencias ausentes com fallback de ncurses" {
+  run libraries '
+    source "$DEV_ROOT/lib/install.sh"
+    mock_dir="$DEV_HOME/mock_mysql"
+    mkdir -p "$mock_dir/bin" "$mock_dir/lib-compat"
+    touch "$mock_dir/bin/mysql"
+    chmod +x "$mock_dir/bin/mysql"
+
+    ldd() {
+      echo "libncurses.so.6 => not found"
+    }
+    ls() {
+      local arg
+      for arg in "$@"; do
+        if [[ "$arg" == *"/libncursesw.so."* ]]; then
+          echo "/usr/lib/x86_64-linux-gnu/libncursesw.so.6.6"
+          return 0
+        fi
+      done
+      return 1
+    }
+
+    compatibilize_libs "$mock_dir"
+    [[ -L "$mock_dir/lib-compat/libncurses.so.6" ]]
+  '
+  [[ "$status" -eq 0 ]]
+}
+
+@test "set_mysql_root_password detecta erro de biblioteca do mysql" {
+  run libraries '
+    source "$DEV_ROOT/lib/config.sh"
+    config_set MYSQL_PASSWORD "testpass"
+    prefix="$(mysql_prefix)"
+    mkdir -p "$prefix/bin"
+    cat > "$prefix/bin/mysql" << "EOF"
+#!/usr/bin/env bash
+echo "error while loading shared libraries: libncurses.so.6: cannot open shared object file" >&2
+exit 127
+EOF
+    chmod +x "$prefix/bin/mysql"
+
+    set_mysql_root_password
+  '
+  [[ "$status" -ne 0 ]]
+  [[ "$output" == *"o cliente mysql falhou por falta de bibliotecas dinâmicas"* ]]
+}
+
+@test "dev doctor alerta quando cliente mysql tem bibliotecas ausentes" {
+  run libraries '
+    source "$DEV_ROOT/lib/doctor.sh"
+    source "$DEV_ROOT/lib/runtime.sh"
+    prefix="$(mysql_prefix)"
+    mkdir -p "$prefix/bin"
+    cat > "$prefix/bin/mysql" << "EOF"
+#!/usr/bin/env bash
+exit 127
+EOF
+    chmod +x "$prefix/bin/mysql"
+    cmd_doctor
+  '
+  [[ "$output" == *"cliente com bibliotecas ausentes"* ]]
+}
+
 @test "has_net_bind_capability detecta presenca e ausencia de capability" {
   run libraries '
     source "$DEV_ROOT/lib/runtime.sh"

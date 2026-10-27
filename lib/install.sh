@@ -10,6 +10,7 @@ APT_MIN=(
   zstd
   libnss3-tools
   libcap2-bin
+  libncurses6
 )
 
 apt_missing() {
@@ -38,23 +39,40 @@ install_apt() {
 }
 
 compatibilize_libs() {
-  local prefix="$1" compat="$1/lib-compat" real
+  local prefix="$1" compat="$1/lib-compat" real=""
   mkdir -p "$compat"
+  local bin binaries=()
+  for bin in "$prefix/bin"/*; do
+    [[ -x "$bin" ]] && binaries+=("$bin")
+  done
+  [[ ${#binaries[@]} -gt 0 ]] || return 0
+
   local missing
   while IFS= read -r missing; do
     [[ -n "$missing" ]] || continue
-    real="$(ls /usr/lib/x86_64-linux-gnu/"${missing}"* 2>/dev/null | head -1 || true)"
+    real="$(ls /usr/lib/x86_64-linux-gnu/"${missing}"* /lib/x86_64-linux-gnu/"${missing}"* 2>/dev/null | head -1 || true)"
+    if [[ -z "$real" && "$missing" == libncurses.so.* ]]; then
+      real="$(ls /usr/lib/x86_64-linux-gnu/libncursesw.so.* /lib/x86_64-linux-gnu/libncursesw.so.* 2>/dev/null | head -1 || true)"
+    fi
     [[ -n "$real" ]] || continue
+    if [[ -L "$compat/$missing" && "$(readlink -f "$compat/$missing" 2>/dev/null || true)" == "$real" ]]; then
+      continue
+    fi
     ln -sf "$real" "$compat/$missing"
     info "$missing → $(basename "$real")"
-  done < <(ldd "$prefix/bin/mysqld" 2>/dev/null | grep 'not found' | awk '{print $1}' || true)
+  done < <(ldd "${binaries[@]}" 2>/dev/null | grep 'not found' | awk '{print $1}' | sort -u || true)
 }
 
 install_mysql() {
   local version="${1:-$MYSQL_VERSION}"
   local prefix="$DEV_RUNTIME/mysql/$version"
   sandbox_libs
-  [[ -x "$prefix/bin/mysqld" ]] && { ok "MySQL $version  já instalado"; return 0; }
+  if [[ -x "$prefix/bin/mysqld" ]]; then
+    compatibilize_libs "$prefix"
+    sandbox_libs
+    ok "MySQL $version  já instalado"
+    return 0
+  fi
 
   local tarball
   tarball="$(download "$(url_for mysql "$version")" "$(cache_name mysql "$version")")"
@@ -78,6 +96,12 @@ install_mysql() {
     missing="$(ldd "$prefix/bin/mysqld" 2>/dev/null | grep 'not found' | awk '{print $1}' | tr '\n' ' ' || true)"
     die "o mysqld não executa; faltam bibliotecas do sistema: ${missing:-desconhecidas}
      tente:  sudo apt install libaio1t64 libnuma1"
+  fi
+  if ! LD_LIBRARY_PATH="$prefix/lib-compat" "$prefix/bin/mysql" --version >/dev/null 2>&1; then
+    local missing
+    missing="$(ldd "$prefix/bin/mysql" 2>/dev/null | grep 'not found' | awk '{print $1}' | tr '\n' ' ' || true)"
+    die "o cliente mysql não executa; faltam bibliotecas do sistema: ${missing:-desconhecidas}
+     tente:  sudo apt install libncurses6"
   fi
 
   config_set MYSQL_VERSION "$version"

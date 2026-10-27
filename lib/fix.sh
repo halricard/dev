@@ -25,6 +25,7 @@ cmd_fix() {
   source "$DEV_ROOT/lib/config.sh"
   source "$DEV_ROOT/lib/services.sh"
   source "$DEV_ROOT/lib/runtime.sh"
+  source "$DEV_ROOT/lib/install.sh"
   [[ -d "$DEV_RUNTIME" ]] || die "nada instalado ainda — rode $DEV install"
 
   local arg
@@ -57,6 +58,24 @@ cmd_fix() {
       else
         hint "$DEV fix -f   confirma com root e restaura permissão"
         hint "ou execute: sudo setcap 'cap_net_bind_service=+ep' $nginx_bin"
+        locked=$(( locked + 1 ))
+      fi
+    fi
+  fi
+  local mysql_dir
+  mysql_dir="$(mysql_prefix)"
+  if [[ -d "$mysql_dir" ]]; then
+    sandbox_libs
+    if ! "$mysql_dir/bin/mysql" --version >/dev/null 2>&1; then
+      warn "MySQL com bibliotecas pendentes"
+      compatibilize_libs "$mysql_dir"
+      sandbox_libs
+      if "$mysql_dir/bin/mysql" --version >/dev/null 2>&1; then
+        ok "bibliotecas do MySQL compatibilizadas em lib-compat"
+        changed=$(( changed + 1 ))
+      else
+        bad "o cliente mysql ainda não executa"
+        hint "tente instalar: sudo apt install libncurses6"
         locked=$(( locked + 1 ))
       fi
     fi

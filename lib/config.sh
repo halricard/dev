@@ -335,6 +335,7 @@ init_datadir() {
 }
 
 mysql_password_applied() {
+  sandbox_libs
   local password
   password="$(config_get MYSQL_PASSWORD)"
   [[ -n "$password" ]] || return 1
@@ -344,16 +345,23 @@ mysql_password_applied() {
 }
 
 set_mysql_root_password() {
-  local prefix password
+  sandbox_libs
+  local prefix password err_output
   prefix="$(mysql_prefix)"
   password="$(config_get MYSQL_PASSWORD)"
   [[ -n "$password" ]] || die "não há senha de banco no config — rode \`$DEV install\`"
 
   mysql_password_applied && return 0
 
-  if ! MYSQL_PWD="" "$prefix/bin/mysql" --socket="$DEV_RUN/mysql.sock" \
-      -u root -e 'SELECT 1' >/dev/null 2>&1; then
-    die "o MySQL não aceita a senha do config nem a senha vazia"
+  if ! err_output="$(MYSQL_PWD="" "$prefix/bin/mysql" --socket="$DEV_RUN/mysql.sock" \
+      -u root -e 'SELECT 1' 2>&1)"; then
+    if [[ "$err_output" == *"error while loading shared libraries"* ]]; then
+      die "o cliente mysql falhou por falta de bibliotecas dinâmicas: $err_output"
+    elif [[ "$err_output" == *"Can't connect"* ]]; then
+      die "não consegui conectar ao MySQL pelo socket $DEV_RUN/mysql.sock"
+    else
+      die "o MySQL não aceita a senha do config nem a senha vazia ($err_output)"
+    fi
   fi
 
   MYSQL_PWD="" "$prefix/bin/mysql" --socket="$DEV_RUN/mysql.sock" -u root <<SQL
