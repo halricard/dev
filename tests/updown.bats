@@ -138,9 +138,9 @@ load helper
 @test "ensure_php aceita versao quando binario ja esta instalado" {
   run libraries '
     source "$DEV_ROOT/lib/project.sh"
-    mkdir -p "$DEV_RUNTIME/php/8.4.6/bin"
-    touch "$DEV_RUNTIME/php/8.4.6/bin/php"
-    chmod +x "$DEV_RUNTIME/php/8.4.6/bin/php"
+    mkdir -p "$DEV_RUNTIME/php/8.4.27/bin"
+    touch "$DEV_RUNTIME/php/8.4.27/bin/php"
+    chmod +x "$DEV_RUNTIME/php/8.4.27/bin/php"
     ensure_php "8.4" "Moodle"
   '
   [ "$status" -eq 0 ]
@@ -149,6 +149,7 @@ load helper
 @test "ensure_php com confirmacao do usuario aciona compile_runtime" {
   run libraries '
     source "$DEV_ROOT/lib/project.sh"
+    runtime_local_tarball() { return 1; }
     confirm() { return 0; }
     compile_runtime() { return 0; }
     ensure_php "8.4" "Moodle"
@@ -161,6 +162,7 @@ load helper
 @test "ensure_php com recusa do usuario cancela sem prosseguir" {
   run libraries '
     source "$DEV_ROOT/lib/project.sh"
+    runtime_local_tarball() { return 1; }
     confirm() { return 1; }
     ensure_php "8.4" "Moodle"
   '

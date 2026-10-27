@@ -17,10 +17,10 @@
 
 set -euo pipefail
 
-DEV_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+DEV_ROOT="${DEV_ROOT:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)}"
 export DEV_ROOT
 
-BUILD_DIR="${WDEV_BUILD_DIR:-/tmp/wdev-runtimes}"
+BUILD_DIR="${WDEV_BUILD_DIR:-/var/tmp/wdev-runtimes}"
 SPC_VERSION="2.8.5"
 
 if [[ -f "$DEV_ROOT/lib/common.sh" ]]; then
@@ -33,7 +33,7 @@ if [[ -f "$DEV_ROOT/lib/runtime.sh" ]]; then
   source "$DEV_ROOT/lib/runtime.sh"
 fi
 
-PHP_STANDARD_EXTENSIONS="bcmath bz2 calendar core ctype curl date dom exif fileinfo filter ftp gd hash iconv intl json lexbor libxml mbstring mysqli mysqlnd openssl pcntl pcre pdo pdo_mysql phar posix random readline reflection session simplexml soap sockets sodium spl standard tokenizer uri xml xmlreader xmlwriter xsl zip zlib"
+PHP_STANDARD_EXTENSIONS="bcmath bz2 calendar core ctype curl date dom exif fileinfo filter ftp gd hash iconv intl json lexbor libxml mbstring mysqli mysqlnd opcache openssl pcntl pcre pdo pdo_mysql phar posix random readline reflection session simplexml soap sockets sodium spl standard tokenizer uri xml xmlreader xmlwriter xsl zip zlib"
 
 # Cores e estilização consistentes com lib/common.sh
 C_RESET=$'\033[0m'
@@ -116,7 +116,7 @@ resolve_php_version() {
   case "$requested" in
     8.4|8.4.*)
       if [[ "$requested" == "8.4" ]]; then
-        printf '8.4.6\n'
+        printf '8.4.27\n'
       else
         printf '%s\n' "$requested"
       fi
@@ -219,6 +219,21 @@ update_manifest() {
 
 package_php_runtime() {
   local version="$1" src_dir="$2"
+  local php_bin=""
+  if [[ -x "$src_dir/bin/php" ]]; then
+    php_bin="$src_dir/bin/php"
+  elif [[ -x "$src_dir/php" ]]; then
+    php_bin="$src_dir/php"
+  fi
+
+  if [[ -n "$php_bin" ]]; then
+    local detected_ver
+    detected_ver="$("$php_bin" -r 'echo PHP_VERSION;' 2>/dev/null || true)"
+    if [[ -n "$detected_ver" ]]; then
+      version="$detected_ver"
+    fi
+  fi
+
   local target_dir="$DEV_ROOT/runtimes/php"
   local filename="php-$version-linux-x86_64.tar.xz"
   local target_archive="$target_dir/$filename"
@@ -258,10 +273,31 @@ package_php_runtime() {
   ok "runtime salvo em runtimes/php/$filename (sha256: ${sha256:0:16}...)"
 }
 
+filter_spc_extensions() {
+  local raw="${1:-}"
+  local tokens
+  tokens="$(echo "$raw" | tr ',' ' ')"
+  local filtered=()
+  local item
+  for item in $tokens; do
+    [[ -n "$item" ]] || continue
+    case "$item" in
+      core|standard|date|lexbor|random|uri)
+        continue
+        ;;
+      *)
+        filtered+=("$item")
+        ;;
+    esac
+  done
+  local IFS=","
+  printf '%s\n' "${filtered[*]}"
+}
+
 build_php_runtime() {
   local requested="${1:-8.5}"
   local dry_run="${2:-0}"
-  local force="${3:-0}"
+  local force="${3:-${DEV_FORCE:-0}}"
 
   local version
   version="$(resolve_php_version "$requested")"
@@ -290,26 +326,43 @@ build_php_runtime() {
   local work_dir="$BUILD_DIR/php-$version"
   mkdir -p "$work_dir"
 
-  info "baixando código-fonte oficial do PHP $version e dependências..."
-  "$spc" download --with-php="$series" php-src,pkg-config,openssl,curl,libxml2,zlib,libzip,bzip2,icu,oniguruma,libsodium,libpng,libjpeg,freetype >/dev/null 2>&1 || true
-
-  info "iniciando compilação estática com glibc (isso pode levar alguns minutos)..."
   local exts_comma
-  exts_comma="$(echo "$PHP_STANDARD_EXTENSIONS" | tr ' ' ',' | sed 's/,core,/,/g' | sed 's/,standard,/,/g' || true)"
+  exts_comma="$(filter_spc_extensions "$PHP_STANDARD_EXTENSIONS")"
 
-  "$spc" build --build-cli --build-fpm "$exts_comma" >/dev/null 2>&1 || {
-    # Se falhar pelo spc por falta de ambiente completo, alertar
-    warn "a compilação direta via spc requer todas as bibliotecas e tempo de CPU"
+  local prev_dir="$PWD"
+  cd "$work_dir"
+
+  export SPC_LIBC="glibc"
+
+  info "provisionando ferramentas internas do static-php-cli (pkg-config)..."
+  "$spc" install-pkg pkg-config >"$work_dir/pkg-config.log" 2>&1 || true
+
+  info "baixando código-fonte oficial do PHP $version e dependências..."
+  "$spc" download --with-php="$series" --for-extensions="$exts_comma" --prefer-pre-built >"$work_dir/download.log" 2>&1 || {
+    "$spc" download --with-php="$series" php-src,openssl,curl,libxml2,zlib,libzip,bzip2,icu,oniguruma,libsodium,libpng,libjpeg,freetype >>"$work_dir/download.log" 2>&1 || true
   }
 
-  local build_out="$BUILD_DIR/buildroot"
-  if [[ -x "$build_out/bin/php" && -x "$build_out/bin/php-fpm" ]]; then
+  info "iniciando compilação estática com glibc (isso pode levar alguns minutos)..."
+  if ! "$spc" build --build-cli --build-fpm "$exts_comma" >"$work_dir/build.log" 2>&1; then
+    warn "a compilação direta via spc falhou ou requer bibliotecas adicionais"
+    hint "consulte o log detalhado em $work_dir/build.log"
+  fi
+
+  cd "$prev_dir"
+
+  local build_out="$work_dir/buildroot"
+  if [[ -x "$build_out/bin/php" && (-x "$build_out/bin/php-fpm" || -x "$build_out/sbin/php-fpm") ]]; then
     package_php_runtime "$version" "$build_out"
     return 0
   fi
 
+  if [[ -x "$BUILD_DIR/buildroot/bin/php" && (-x "$BUILD_DIR/buildroot/bin/php-fpm" || -x "$BUILD_DIR/buildroot/sbin/php-fpm") ]]; then
+    package_php_runtime "$version" "$BUILD_DIR/buildroot"
+    return 0
+  fi
+
   # Fallback caso já tenhamos os binários gerados ou mock em ambiente de teste
-  if [[ -x "$work_dir/bin/php" && -x "$work_dir/bin/php-fpm" ]]; then
+  if [[ -x "$work_dir/bin/php" && (-x "$work_dir/bin/php-fpm" || -x "$work_dir/sbin/php-fpm") ]]; then
     package_php_runtime "$version" "$work_dir"
     return 0
   fi

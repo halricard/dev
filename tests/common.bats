@@ -55,15 +55,15 @@ load helper
 @test "php_version e php_bin resolvem versoes multiplas no sandbox com fallback para DEFAULT_PHP" {
   run libraries '
     config_set DEFAULT_PHP "8.5.12"
-    mkdir -p "$DEV_RUNTIME/php/8.4.6/bin" "$DEV_RUNTIME/php/8.5.12/bin"
-    touch "$DEV_RUNTIME/php/8.4.6/bin/php" "$DEV_RUNTIME/php/8.5.12/bin/php"
-    chmod +x "$DEV_RUNTIME/php/8.4.6/bin/php" "$DEV_RUNTIME/php/8.5.12/bin/php"
+    mkdir -p "$DEV_RUNTIME/php/8.4.27/bin" "$DEV_RUNTIME/php/8.5.12/bin"
+    touch "$DEV_RUNTIME/php/8.4.27/bin/php" "$DEV_RUNTIME/php/8.5.12/bin/php"
+    chmod +x "$DEV_RUNTIME/php/8.4.27/bin/php" "$DEV_RUNTIME/php/8.5.12/bin/php"
 
-    [ "$(php_version "8.4")" = "8.4.6" ]
+    [ "$(php_version "8.4")" = "8.4.27" ]
     [ "$(php_version "8.5")" = "8.5.12" ]
     [ "$(php_version "")" = "8.5.12" ]
 
-    [ "$(php_bin "8.4")" = "$DEV_RUNTIME/php/8.4.6/bin/php" ]
+    [ "$(php_bin "8.4")" = "$DEV_RUNTIME/php/8.4.27/bin/php" ]
     [ "$(php_bin "8.5")" = "$DEV_RUNTIME/php/8.5.12/bin/php" ]
     [ "$(php_bin "")" = "$DEV_RUNTIME/php/8.5.12/bin/php" ]
   '

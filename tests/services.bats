@@ -138,15 +138,15 @@ load helper
     source "$DEV_ROOT/lib/config.sh"
     config_set DEFAULT_PHP "8.5.12"
     mkdir -p "$DEV_SITES" "$BATS_TEST_TMPDIR/moodle-site"
-    printf "PROJECT=\"moodle-site\"\nPHP=\"8.4.6\"\n" > "$BATS_TEST_TMPDIR/moodle-site/dev.conf"
+    printf "PROJECT=\"moodle-site\"\nPHP=\"8.4.27\"\n" > "$BATS_TEST_TMPDIR/moodle-site/dev.conf"
     printf "%s\n" "$BATS_TEST_TMPDIR/moodle-site" > "$DEV_SITES/moodle-site"
 
     write_fpm_pools
 
     [ -f "$DEV_ETC/php/8.5.12/php-fpm.conf" ]
-    [ -f "$DEV_ETC/php/8.4.6/php-fpm.conf" ]
+    [ -f "$DEV_ETC/php/8.4.27/php-fpm.conf" ]
     grep -q "php-8.5.12.sock" "$DEV_ETC/php/8.5.12/php-fpm.conf"
-    grep -q "php-8.4.6.sock" "$DEV_ETC/php/8.4.6/php-fpm.conf"
+    grep -q "php-8.4.27.sock" "$DEV_ETC/php/8.4.27/php-fpm.conf"
   '
   [[ "$status" -eq 0 ]]
 }
@@ -155,17 +155,17 @@ load helper
   run libraries '
     source "$DEV_ROOT/lib/services.sh"
     mkdir -p "$DEV_RUN"
-    echo "$$" > "$DEV_RUN/php-fpm-8.4.6.pid"
+    echo "$$" > "$DEV_RUN/php-fpm-8.4.27.pid"
     echo "$$" > "$DEV_RUN/php-fpm-8.5.12.pid"
-    touch "$DEV_RUN/php-8.4.6.sock" "$DEV_RUN/php-8.5.12.sock"
+    touch "$DEV_RUN/php-8.4.27.sock" "$DEV_RUN/php-8.5.12.sock"
     running() { return 0; }
     kill() { return 0; }
     cmd_stop
-    [ ! -f "$DEV_RUN/php-8.4.6.sock" ]
+    [ ! -f "$DEV_RUN/php-8.4.27.sock" ]
     [ ! -f "$DEV_RUN/php-8.5.12.sock" ]
   '
   [[ "$status" -eq 0 ]]
-  [[ "$output" == *"php-fpm 8.4.6"* ]]
+  [[ "$output" == *"php-fpm 8.4.27"* ]]
   [[ "$output" == *"php-fpm 8.5.12"* ]]
 }
 

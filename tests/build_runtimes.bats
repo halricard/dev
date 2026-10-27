@@ -14,9 +14,9 @@ load helper
 @test "build-runtimes.sh php 8.4 --plan simula compilação sem tocar no disco" {
   run "$ROOT/tools/build-runtimes.sh" php 8.4 --plan
   [ "$status" -eq 0 ]
-  [[ "$output" == *"COMPILAÇÃO DO PHP 8.4.6 (8.4)"* ]]
+  [[ "$output" == *"COMPILAÇÃO DO PHP 8.4.27 (8.4)"* ]]
   [[ "$output" == *"modo simulação (--plan)"* ]]
-  [[ "$output" == *"runtimes/php/php-8.4.6-linux-x86_64.tar.xz"* ]]
+  [[ "$output" == *"runtimes/php/php-8.4.27-linux-x86_64.tar.xz"* ]]
 }
 
 @test "build-runtimes.sh check-deps detecta ferramentas ausentes" {
@@ -180,4 +180,76 @@ SCRIPT
   [[ "$output" != *"baixando static-php-cli"* ]]
   [[ "$output" == *"static-php-cli 2.8.5-cached"* ]]
 }
+
+@test "filter_spc_extensions remove tokens invalidos e preserva extensoes validas" {
+  run bash -c "
+    DEV_ROOT='$ROOT'
+    source '$ROOT/lib/common.sh'
+    source '$ROOT/tools/build-runtimes.sh'
+
+    input='bcmath bz2 core curl date dom lexbor mysqli opcache random spl standard uri zip'
+    res=\$(filter_spc_extensions \"\$input\")
+    echo \"\$res\"
+  "
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"bcmath"* ]]
+  [[ "$output" == *"bz2"* ]]
+  [[ "$output" == *"curl"* ]]
+  [[ "$output" == *"dom"* ]]
+  [[ "$output" == *"mysqli"* ]]
+  [[ "$output" == *"opcache"* ]]
+  [[ "$output" == *"zip"* ]]
+  [[ "$output" != *"core"* ]]
+  [[ "$output" != *"standard"* ]]
+  [[ "$output" != *"date"* ]]
+  [[ "$output" != *"lexbor"* ]]
+  [[ "$output" != *"random"* ]]
+  [[ "$output" != *"uri"* ]]
+}
+
+@test "build_php_runtime orquestra spc com pkg-config, glibc e isolamento de diretorio" {
+  run bash -c '
+    ROOT="$1"
+    mock_dir=$(mktemp -d)
+    DEV_ROOT="$mock_dir/dev"
+    log_file="$mock_dir/spc_calls.log"
+    mkdir -p "$DEV_ROOT/runtimes/php" "$mock_dir/wdev-runtimes/spc-bin"
+    
+    cat <<SCRIPT > "$mock_dir/wdev-runtimes/spc-bin/spc"
+#!/usr/bin/env bash
+echo "\$PWD: spc \$* (SPC_LIBC=\${SPC_LIBC:-})" >> "$log_file"
+if [[ "\$1" == "--version" ]]; then
+  echo "static-php-cli 2.8.5"
+  exit 0
+fi
+if [[ "\$1" == "build" ]]; then
+  mkdir -p "\$PWD/buildroot/bin"
+  touch "\$PWD/buildroot/bin/php" "\$PWD/buildroot/bin/php-fpm"
+  chmod +x "\$PWD/buildroot/bin/php" "\$PWD/buildroot/bin/php-fpm"
+  exit 0
+fi
+exit 0
+SCRIPT
+    chmod +x "$mock_dir/wdev-runtimes/spc-bin/spc"
+
+    WDEV_BUILD_DIR="$mock_dir/wdev-runtimes"
+    export WDEV_BUILD_DIR DEV_ROOT
+
+    source "$ROOT/lib/common.sh"
+    source "$ROOT/tools/build-runtimes.sh"
+
+    build_php_runtime 8.4 0 1
+
+    cat "$log_file"
+    [ -f "$DEV_ROOT/runtimes/php/php-8.4.27-linux-x86_64.tar.xz" ]
+    rm -rf "$mock_dir"
+  ' _ "$ROOT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"install-pkg pkg-config (SPC_LIBC=glibc)"* ]]
+  [[ "$output" == *"download --with-php=8.4"* ]]
+  [[ "$output" == *"build --build-cli --build-fpm"*"opcache"* ]]
+  [[ "$output" == *"runtime salvo em runtimes/php/php-8.4.27-linux-x86_64.tar.xz"* ]]
+}
+
+
 

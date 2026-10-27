@@ -79,19 +79,28 @@ setup() {
 
 @test "cmd_new com receita moodle aciona ensure_php com versao 8.4 e configura vhost 8.4" {
   mkdir -p "$DEV_PLUGINS/installed/moodle"
+  cat << 'EOF' > "$DEV_PLUGINS/installed/moodle/recipe.sh"
+source "$DEV_ROOT/plugins/moodle/recipe.sh"
+recipe_install() {
+  local dir="$1"
+  mkdir -p "$dir/app/public"
+  touch "$dir/app/public/index.php"
+}
+EOF
+
   IGNORE="services.sh" run in_project '
     source "$DEV_ROOT/lib/project.sh"
+    runtime_local_tarball() { return 1; }
     cmd_start() { return 0; }
     running() { return 0; }
     create_database() { :; }
-    recipe_install() { :; }
     serve_project() { :; }
     cmd_open() { :; }
     confirm() { return 0; }
     compile_runtime() {
-      mkdir -p "$DEV_RUNTIME/php/8.4.6/bin"
-      touch "$DEV_RUNTIME/php/8.4.6/bin/php"
-      chmod +x "$DEV_RUNTIME/php/8.4.6/bin/php"
+      mkdir -p "$DEV_RUNTIME/php/8.4.27/bin"
+      touch "$DEV_RUNTIME/php/8.4.27/bin/php"
+      chmod +x "$DEV_RUNTIME/php/8.4.27/bin/php"
       return 0
     }
 
@@ -102,5 +111,33 @@ setup() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"COMPILAÇÃO SOB DEMANDA: PHP 8.4"* ]]
   [[ "$output" == *"CRIANDO PROJETO meu-moodle (moodle)"* ]]
+  [[ "$output" == *"PHP 8.4 instalado com sucesso"* ]]
 }
+
+@test "cmd_new com receita moodle aborta criacao quando compilacao do PHP falha" {
+  mkdir -p "$DEV_PLUGINS/installed/moodle"
+  cat << 'EOF' > "$DEV_PLUGINS/installed/moodle/recipe.sh"
+source "$DEV_ROOT/plugins/moodle/recipe.sh"
+recipe_install() { :; }
+EOF
+
+  IGNORE="services.sh" run in_project '
+    source "$DEV_ROOT/lib/project.sh"
+    runtime_local_tarball() { return 1; }
+    cmd_start() { return 0; }
+    running() { return 0; }
+    create_database() { :; }
+    serve_project() { :; }
+    cmd_open() { :; }
+    confirm() { return 0; }
+    compile_runtime() { return 1; }
+
+    cmd_new moodle meu-moodle-falha
+  '
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"COMPILAÇÃO SOB DEMANDA: PHP 8.4"* ]]
+  [[ "$output" == *"falha ao compilar o PHP 8.4"* ]]
+  [ ! -f "$TEST_PROJECT/meu-moodle-falha/dev.conf" ]
+}
+
 

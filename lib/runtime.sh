@@ -26,7 +26,7 @@ runtime_version() {
           return 0
         fi
         case "$ver" in
-          8.4|8.4.*) printf '8.4.6\n' ;;
+          8.4|8.4.*) printf '8.4.27\n' ;;
           8.5|8.5.*) printf '%s\n' "${PHP_RUNTIME_VERSION:-8.5.12}" ;;
           *)         printf '%s\n' "$ver" ;;
         esac
@@ -104,7 +104,19 @@ glibc_too_old() {
   [[ "$(printf '%s\n%s\n' "$required" "$have" | sort -V | head -1 || true)" != "$required" ]]
 }
 
-runtime_expected_extensions() { printf '%s\n' "${PHP_RUNTIME_EXTENSIONS:-}"; }
+runtime_expected_extensions() {
+  local ver="${1:-}"
+  local exts="${PHP_RUNTIME_EXTENSIONS:-}"
+  case "$ver" in
+    8.4|8.4.*)
+      printf '%s\n' "$exts" | tr ' ' '\n' | grep -vE '^(lexbor|uri)$' | tr '\n' ' '
+      printf '\n'
+      ;;
+    *)
+      printf '%s\n' "$exts"
+      ;;
+  esac
+}
 
 runtime_dir() {
   local comp="$1" ver="${2:-}"
@@ -160,8 +172,11 @@ runtime_fetch() {
 }
 
 runtime_check_extensions() {
-  local php="$1" expected loaded missing="" found
-  expected="$(runtime_expected_extensions)"
+  local php="$1" ver="${2:-}" expected loaded missing="" found
+  if [[ -z "$ver" && -x "$php" ]]; then
+    ver="$("$php" -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null || true)"
+  fi
+  expected="$(runtime_expected_extensions "$ver")"
   [[ -n "$expected" ]] || return 0
   loaded="$("$php" -m 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)"
   for found in $expected; do
@@ -189,7 +204,7 @@ runtime_verify() {
       fi
       "$php" -v >/dev/null 2>&1 || die "o PHP do runtime não executa nesta máquina"
       "$php" -v 2>/dev/null | grep -q 'Zend OPcache' || die "o PHP do runtime está sem o OPcache"
-      runtime_check_extensions "$php"
+      runtime_check_extensions "$php" "$ver"
       [[ -x "$dir/sbin/php-fpm" ]] || die "o tarball do PHP não tem sbin/php-fpm"
       ;;
   esac
