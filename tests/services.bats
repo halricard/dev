@@ -68,3 +68,65 @@ load helper
   [[ "$output" == *"o nginx precisa de permissão para escutar nas portas"* ]]
   [[ "$output" == *"sudo setcap 'cap_net_bind_service=+ep'"* ]]
 }
+
+@test "process_exe identifica executavel via cmdline quando readlink e restrito" {
+  run libraries '
+    source "$DEV_ROOT/lib/services.sh"
+    readlink() {
+      if [[ "$*" == *"/exe" ]]; then return 1; fi
+      command readlink "$@"
+    }
+    bash -c "exec -a \"$DEV_RUNTIME/nginx/1.30.5/sbin/nginx\" sleep 2" &
+    sub_pid=$!
+    res="$(process_exe "$sub_pid")"
+    kill "$sub_pid" 2>/dev/null || true
+    [[ "$res" == "$DEV_RUNTIME/nginx/1.30.5/sbin/nginx" ]]
+  '
+  [[ "$status" -eq 0 ]]
+}
+
+@test "port_owner classifica processo com pid registrado como own" {
+  run libraries '
+    source "$DEV_ROOT/lib/services.sh"
+    mkdir -p "$DEV_RUN"
+    echo "$$" > "$(pid_file nginx)"
+    port_busy() { return 0; }
+    ss() { printf "LISTEN 0 511 127.0.0.1:80 0.0.0.0:* users:((\"nginx\",pid=%s,fd=6))\n" "$$"; }
+    sudo() { return 1; }
+    port_owner "$HTTP_PORT"
+    printf "%s|%s\n" "$OWNER_CLASS" "$OWNER_SERVICE"
+  '
+  [[ "$status" -eq 0 ]]
+  [[ "$output" == "own|nginx" ]]
+}
+
+@test "take_over_ports nao encerra servico proprio e nao consome stdin" {
+  run libraries '
+    source "$DEV_ROOT/lib/services.sh"
+    mkdir -p "$DEV_RUN"
+    echo "$$" > "$(pid_file nginx)"
+    port_busy() { [[ "$1" == "$HTTP_PORT" ]]; }
+    ss() { printf "LISTEN 0 511 127.0.0.1:80 0.0.0.0:* users:((\"nginx\",pid=%s,fd=6))\n" "$$"; }
+    take_over_ports
+  '
+  [[ "$status" -eq 0 ]]
+  [[ "$output" != *"continua ocupada"* ]]
+  [[ "$output" != *"não consegui encerrar"* ]]
+}
+
+@test "take_over_ports isola stdin e respeita confirmacao do usuario" {
+  run libraries '
+    source "$DEV_ROOT/lib/services.sh"
+    port_busy() { [[ "$1" == "$HTTP_PORT" ]]; }
+    port_owner() {
+      OWNER_CLASS="user"
+      OWNER_PID="$$"
+      OWNER_NAME="custom-proc"
+      OWNER_USER="$USER"
+    }
+    confirm() { return 1; }
+    take_over_ports
+  '
+  [[ "$status" -ne 0 ]]
+  [[ "$output" == *"porta $HTTP_PORT continua ocupada por custom-proc"* ]]
+}

@@ -48,9 +48,20 @@ port_owner() {
   OWNER_USER="$(stat -c %U "/proc/$OWNER_PID" 2>/dev/null || echo '?')"
   exe="$(process_exe "$OWNER_PID")"
 
+  local expected_service
+  expected_service="$(service_of_port "$port")"
+  if [[ -n "$expected_service" && -f "$(pid_file "$expected_service")" ]] \
+     && [[ "$OWNER_PID" == "$(cat "$(pid_file "$expected_service")" 2>/dev/null || true)" ]] \
+     && kill -0 "$OWNER_PID" 2>/dev/null; then
+    OWNER_CLASS="own"
+    OWNER_SERVICE="$expected_service"
+    return 0
+  fi
+
   if [[ -n "$exe" && "$exe" == "$DEV_RUNTIME"/* ]]; then
     OWNER_CLASS="own"
     OWNER_SERVICE="$(service_of_exe "$exe")"
+    [[ -z "$OWNER_SERVICE" && -n "$expected_service" ]] && OWNER_SERVICE="$expected_service"
   elif [[ "$OWNER_USER" == "$USER" ]]; then
     stack="$(stack_root_of_process "$OWNER_PID" || true)"
     if [[ -n "$stack" ]]; then
@@ -214,8 +225,8 @@ owner_remedy() {
 
 process_exe() {
   local pid="$1" exe part parts=() real
-  exe="$(readlink -f "/proc/$pid/exe" 2>/dev/null || true)"
-  if [[ -n "$exe" ]]; then
+  exe="$(readlink -e "/proc/$pid/exe" 2>/dev/null || true)"
+  if [[ -n "$exe" && "$exe" != "/proc/"* ]]; then
     real="$(readlink -f "$DEV_RUNTIME" 2>/dev/null || true)"
     [[ -n "$real" && "$real" != "$DEV_RUNTIME" && "$exe" == "$real"/* ]] \
       && exe="$DEV_RUNTIME/${exe#"$real"/}"
@@ -246,8 +257,8 @@ master_of() {
 
 process_mark() {
   local exe
-  exe="$(readlink -f "/proc/$1/exe" 2>/dev/null || true)"
-  if [[ -n "$exe" ]]; then
+  exe="$(readlink -e "/proc/$1/exe" 2>/dev/null || true)"
+  if [[ -n "$exe" && "$exe" != "/proc/"* ]]; then
     printf 'exe:%s\n' "$exe"
     return 0
   fi
@@ -423,7 +434,7 @@ stack_ports() {
 
 take_over_ports() {
   local port failed=0
-  while IFS= read -r port; do
+  while IFS= read -r -u 3 port; do
     [[ -n "$port" ]] || continue
     port_busy "$port" || continue
     port_owner "$port"
@@ -454,7 +465,7 @@ take_over_ports() {
         [[ -n "$OWNER_REMEDY" ]] && hint "$OWNER_REMEDY"
         failed=1 ;;
     esac
-  done < <(stack_ports)
+  done 3< <(stack_ports)
   (( failed == 0 ))
 }
 
