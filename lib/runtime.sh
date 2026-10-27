@@ -209,6 +209,7 @@ APT_BUILD_DEPS=(
   cmake
   pkg-config
   xz-utils
+  bzip2
 )
 
 missing_build_deps() {

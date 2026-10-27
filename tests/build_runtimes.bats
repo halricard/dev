@@ -20,7 +20,7 @@ load helper
 }
 
 @test "build-runtimes.sh check-deps detecta ferramentas ausentes" {
-  run "$ROOT/tools/build-runtimes.sh" check-deps
+  run bash -c "'$ROOT/tools/build-runtimes.sh' check-deps </dev/null"
   # Se ferramentas faltarem, o código é 1 com diagnóstico
   if [[ "$status" -ne 0 ]]; then
     [[ "$output" == *"faltam"* ]]
@@ -36,10 +36,10 @@ load helper
   [[ "$output" == *"comando desconhecido"* ]]
 }
 
-@test "lib/runtime.sh exporta APT_BUILD_DEPS com 13 ferramentas oficiais" {
+@test "lib/runtime.sh exporta APT_BUILD_DEPS com ferramentas oficiais incluindo bzip2" {
   run bash -c "source '$ROOT/lib/runtime.sh' && printf '%s\n' \"\${#APT_BUILD_DEPS[@]}\""
   [ "$status" -eq 0 ]
-  [ "$output" -ge 13 ]
+  [ "$output" -ge 14 ]
 
   run bash -c "source '$ROOT/lib/runtime.sh' && printf '%s ' \"\${APT_BUILD_DEPS[@]}\""
   [ "$status" -eq 0 ]
@@ -50,6 +50,7 @@ load helper
   [[ "$output" == *"bison "* ]]
   [[ "$output" == *"re2c "* ]]
   [[ "$output" == *"flex "* ]]
+  [[ "$output" == *"bzip2 "* ]]
 }
 
 @test "missing_build_deps identifica ferramentas ausentes" {
@@ -97,5 +98,86 @@ load helper
   [ "$status" -eq 0 ]
   [[ "$output" == *"instalando ferramentas de compilação..."* ]]
   [[ "$output" == *"ferramentas de compilação instaladas com sucesso"* ]]
+}
+
+@test "spc_binary baixa e descompacta tarball quando spc nao esta em cache" {
+  run bash -c "
+    DEV_ROOT='$ROOT'
+    source '$ROOT/lib/common.sh'
+    source '$ROOT/tools/build-runtimes.sh'
+    
+    mock_dir=\$(mktemp -d)
+    DEV_CACHE=\"\$mock_dir/cache\"
+    
+    curl() {
+      local out=''
+      while [[ \$# -gt 0 ]]; do
+        if [[ \"\$1\" == \"-o\" ]]; then
+          out=\"\$2\"
+          shift 2
+          continue
+        fi
+        shift
+      done
+      
+      local build_tmp
+      build_tmp=\$(mktemp -d)
+      cat <<'SCRIPT' > \"\$build_tmp/spc\"
+#!/usr/bin/env bash
+if [[ \"\$1\" == \"--version\" ]]; then
+  echo 'static-php-cli 2.8.5'
+  exit 0
+fi
+exit 0
+SCRIPT
+      chmod +x \"\$build_tmp/spc\"
+      tar -czf \"\$out\" -C \"\$build_tmp\" spc
+      rm -rf \"\$build_tmp\"
+      return 0
+    }
+    
+    spc_path=\$(spc_binary)
+    [ -x \"\$spc_path\" ]
+    \"\$spc_path\" --version
+    rm -rf \"\$mock_dir\"
+  "
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"baixando static-php-cli 2.8.5 para compilação local"* ]]
+  [[ "$output" == *"static-php-cli 2.8.5"* ]]
+}
+
+@test "spc_binary reutiliza binario spc existente no cache sem novo download" {
+  run bash -c "
+    DEV_ROOT='$ROOT'
+    source '$ROOT/lib/common.sh'
+    source '$ROOT/tools/build-runtimes.sh'
+    
+    mock_dir=\$(mktemp -d)
+    DEV_CACHE=\"\$mock_dir/cache\"
+    mkdir -p \"\$DEV_CACHE/spc\"
+    
+    cat <<'SCRIPT' > \"\$DEV_CACHE/spc/spc\"
+#!/usr/bin/env bash
+if [[ \"\$1\" == \"--version\" ]]; then
+  echo 'static-php-cli 2.8.5-cached'
+  exit 0
+fi
+exit 0
+SCRIPT
+    chmod +x \"\$DEV_CACHE/spc/spc\"
+    
+    curl() {
+      echo 'curl should not be called' >&2
+      return 1
+    }
+    
+    spc_path=\$(spc_binary)
+    [ \"\$spc_path\" = \"\$DEV_CACHE/spc/spc\" ]
+    \"\$spc_path\" --version
+    rm -rf \"\$mock_dir\"
+  "
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"baixando static-php-cli"* ]]
+  [[ "$output" == *"static-php-cli 2.8.5-cached"* ]]
 }
 

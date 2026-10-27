@@ -10,7 +10,7 @@
 #   tools/build-runtimes.sh --help           # exibe esta ajuda
 #
 # Requisitos do sistema:
-#   gcc g++ make autoconf automake libtool bison re2c flex autopoint cmake pkg-config xz-utils
+#   gcc g++ make autoconf automake libtool bison re2c flex autopoint cmake pkg-config xz-utils bzip2
 #
 # Contrato do repositório:
 #   Nomes em inglês, prosa em português.
@@ -21,7 +21,7 @@ DEV_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 export DEV_ROOT
 
 BUILD_DIR="${WDEV_BUILD_DIR:-/tmp/wdev-runtimes}"
-SPC_VERSION="3.6.1"
+SPC_VERSION="2.8.5"
 
 if [[ -f "$DEV_ROOT/lib/common.sh" ]]; then
   # shellcheck source=lib/common.sh
@@ -76,7 +76,7 @@ usage() {
     -h, --help          exibe esta mensagem
 
   REQUISITOS
-    gcc g++ make autoconf automake libtool bison re2c flex autopoint cmake pkg-config xz-utils
+    gcc g++ make autoconf automake libtool bison re2c flex autopoint cmake pkg-config xz-utils bzip2
 
 TXT
 }
@@ -148,20 +148,46 @@ spc_binary() {
   fi
 
   local cache_dir="${DEV_CACHE:-${HOME}/.cache/dev}/spc"
-  if [[ -x "$cache_dir/spc" ]]; then
+  if [[ -x "$cache_dir/spc" ]] && "$cache_dir/spc" --version >/dev/null 2>&1; then
     printf '%s\n' "$cache_dir/spc"
     return 0
   fi
 
   mkdir -p "$cache_dir"
-  local spc_url="https://github.com/crazywhalecc/static-php-cli/releases/download/$SPC_VERSION/spc-linux-x86_64"
-  info "baixando static-php-cli $SPC_VERSION para compilação local"
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsSL -o "$cache_dir/spc" "$spc_url" || return 1
-  else
+  local spc_url="https://github.com/crazywhalecc/static-php-cli/releases/download/$SPC_VERSION/spc-linux-x86_64.tar.gz"
+  info "baixando static-php-cli $SPC_VERSION para compilação local" >&2
+  if ! command -v curl >/dev/null 2>&1; then
     return 1
   fi
-  chmod +x "$cache_dir/spc"
+
+  local tmp_dir tmp_tar
+  tmp_dir="$(mktemp -d)"
+  tmp_tar="$tmp_dir/spc.tar.gz"
+
+  if ! curl -fsSL -o "$tmp_tar" "$spc_url"; then
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+
+  if ! tar -xzf "$tmp_tar" -C "$tmp_dir"; then
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+
+  if [[ ! -f "$tmp_dir/spc" ]]; then
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+
+  chmod +x "$tmp_dir/spc"
+  mv -f "$tmp_dir/spc" "$cache_dir/spc"
+  rm -rf "$tmp_dir"
+
+  if ! "$cache_dir/spc" --version >/dev/null 2>&1; then
+    rm -f "$cache_dir/spc"
+    return 1
+  fi
+
   printf '%s\n' "$cache_dir/spc"
 }
 
@@ -265,13 +291,13 @@ build_php_runtime() {
   mkdir -p "$work_dir"
 
   info "baixando código-fonte oficial do PHP $version e dependências..."
-  "$spc" download --for-php="$series" php-src,pkg-config,openssl,curl,libxml2,zlib,libzip,bzip2,icu,oniguruma,libsodium,libpng,libjpeg,freetype >/dev/null 2>&1 || true
+  "$spc" download --with-php="$series" php-src,pkg-config,openssl,curl,libxml2,zlib,libzip,bzip2,icu,oniguruma,libsodium,libpng,libjpeg,freetype >/dev/null 2>&1 || true
 
   info "iniciando compilação estática com glibc (isso pode levar alguns minutos)..."
   local exts_comma
   exts_comma="$(echo "$PHP_STANDARD_EXTENSIONS" | tr ' ' ',' | sed 's/,core,/,/g' | sed 's/,standard,/,/g' || true)"
 
-  "$spc" build --build-cli --build-fpm --enable-zts=no "$exts_comma" >/dev/null 2>&1 || {
+  "$spc" build --build-cli --build-fpm "$exts_comma" >/dev/null 2>&1 || {
     # Se falhar pelo spc por falta de ambiente completo, alertar
     warn "a compilação direta via spc requer todas as bibliotecas e tempo de CPU"
   }
