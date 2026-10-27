@@ -36,6 +36,23 @@ load helper
   [[ "$status" -eq 0 ]]
 }
 
+@test "apt_missing verifica tanto dependencias minimas quanto APT_BUILD_DEPS" {
+  run libraries '
+    source "$DEV_ROOT/lib/install.sh"
+    dpkg() {
+      if [[ "$2" == "gcc" || "$2" == "bison" ]]; then
+        return 1
+      fi
+      return 0
+    }
+    apt-cache() { return 1; }
+    missing=$(apt_missing)
+    printf "%s\n" "$missing" | grep -qx "gcc"
+    printf "%s\n" "$missing" | grep -qx "bison"
+  '
+  [[ "$status" -eq 0 ]]
+}
+
 @test "compatibilize_libs cria symlinks para dependencias ausentes com fallback de ncurses" {
   run libraries '
     source "$DEV_ROOT/lib/install.sh"
@@ -97,6 +114,28 @@ EOF
     cmd_doctor
   '
   [[ "$output" == *"cliente com bibliotecas ausentes"* ]]
+}
+
+@test "dev doctor diagnostica presenca e ausencia de build-tools" {
+  run libraries '
+    source "$DEV_ROOT/lib/doctor.sh"
+    source "$DEV_ROOT/lib/runtime.sh"
+    mkdir -p "$DEV_RUNTIME"
+    missing_build_deps() { echo "gcc"; echo "make"; }
+    IGNORE="runtime.sh" cmd_doctor
+  '
+  [[ "$output" == *"build-tools"* ]]
+  [[ "$output" == *"faltam 2 ferramenta(s) de compilação"* ]]
+
+  run libraries '
+    source "$DEV_ROOT/lib/doctor.sh"
+    source "$DEV_ROOT/lib/runtime.sh"
+    mkdir -p "$DEV_RUNTIME"
+    missing_build_deps() { :; }
+    IGNORE="runtime.sh" cmd_doctor
+  '
+  [[ "$output" == *"build-tools"* ]]
+  [[ "$output" == *"ferramentas de compilação presentes"* ]]
 }
 
 @test "has_net_bind_capability detecta presenca e ausencia de capability" {

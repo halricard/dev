@@ -3,6 +3,11 @@
 #
 # Runtimes pré-compilados e binários oficiais. Não compila nada do fonte.
 
+if [[ -f "$DEV_ROOT/lib/runtime.sh" ]] && ! declare -p APT_BUILD_DEPS >/dev/null 2>&1; then
+  # shellcheck source=lib/runtime.sh
+  source "$DEV_ROOT/lib/runtime.sh"
+fi
+
 APT_MIN=(
   ca-certificates curl openssl
   iproute2 procps
@@ -15,7 +20,14 @@ APT_MIN=(
 
 apt_missing() {
   local missing=() package
-  for package in "${APT_MIN[@]}"; do
+  local -A seen=()
+  local all_packages=("${APT_MIN[@]}")
+  if declare -p APT_BUILD_DEPS >/dev/null 2>&1; then
+    all_packages+=("${APT_BUILD_DEPS[@]}")
+  fi
+  for package in "${all_packages[@]}"; do
+    [[ -n "${seen[$package]:-}" ]] && continue
+    seen["$package"]=1
     dpkg -s "$package" >/dev/null 2>&1 || missing+=("$package")
   done
   if ! dpkg -s libaio1t64 >/dev/null 2>&1 && ! dpkg -s libaio1 >/dev/null 2>&1; then

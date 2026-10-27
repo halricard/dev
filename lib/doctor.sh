@@ -68,6 +68,17 @@ cmd_doctor() {
   present "Adminer"  "$DEV_HOME/adminer/adminer.php"        "$ADMINER_VERSION"
   present "Composer" "$DEV_RUNTIME/composer/composer.phar"  "$COMPOSER_VERSION"
 
+  local build_missing=()
+  mapfile -t build_missing < <(missing_build_deps || true)
+  if [[ ${#build_missing[@]} -eq 0 || -z "${build_missing[0]:-}" ]]; then
+    ok "$(printf '%-10s %s' "build-tools" "ferramentas de compilação presentes")"
+  else
+    warn "$(printf '%-10s %s' "build-tools" "faltam ${#build_missing[@]} ferramenta(s) de compilação")"
+    hint "$DEV install   instala ferramentas faltantes"
+    hint "ou instale: sudo apt install ${build_missing[*]}"
+    problems=$(( problems + 1 ))
+  fi
+
   if [[ "$DEV" == dev ]]; then
     ok "$(printf '%-10s %s' "comando" "dev no PATH")"
   else

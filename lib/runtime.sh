@@ -195,6 +195,39 @@ runtime_verify() {
   esac
 }
 
+APT_BUILD_DEPS=(
+  gcc
+  g++
+  make
+  autoconf
+  automake
+  libtool
+  bison
+  re2c
+  flex
+  autopoint
+  cmake
+  pkg-config
+  xz-utils
+)
+
+missing_build_deps() {
+  local missing=()
+  local tool
+  for tool in "${APT_BUILD_DEPS[@]}"; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+      if command -v dpkg-query >/dev/null 2>&1; then
+        if ! dpkg-query -s "$tool" >/dev/null 2>&1; then
+          missing+=("$tool")
+        fi
+      else
+        missing+=("$tool")
+      fi
+    fi
+  done
+  printf '%s\n' "${missing[@]}"
+}
+
 compile_runtime() {
   local component="$1" version="${2:-}"
   case "$component" in

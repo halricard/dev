@@ -23,21 +23,15 @@ export DEV_ROOT
 BUILD_DIR="${WDEV_BUILD_DIR:-/tmp/wdev-runtimes}"
 SPC_VERSION="3.6.1"
 
-APT_BUILD_DEPS=(
-  gcc
-  g++
-  make
-  autoconf
-  automake
-  libtool
-  bison
-  re2c
-  flex
-  autopoint
-  cmake
-  pkg-config
-  xz-utils
-)
+if [[ -f "$DEV_ROOT/lib/common.sh" ]]; then
+  # shellcheck source=lib/common.sh
+  source "$DEV_ROOT/lib/common.sh"
+fi
+
+if [[ -f "$DEV_ROOT/lib/runtime.sh" ]]; then
+  # shellcheck source=lib/runtime.sh
+  source "$DEV_ROOT/lib/runtime.sh"
+fi
 
 PHP_STANDARD_EXTENSIONS="bcmath bz2 calendar core ctype curl date dom exif fileinfo filter ftp gd hash iconv intl json lexbor libxml mbstring mysqli mysqlnd openssl pcntl pcre pdo pdo_mysql phar posix random readline reflection session simplexml soap sockets sodium spl standard tokenizer uri xml xmlreader xmlwriter xsl zip zlib"
 
@@ -87,23 +81,6 @@ usage() {
 TXT
 }
 
-missing_build_deps() {
-  local missing=()
-  local tool
-  for tool in "${APT_BUILD_DEPS[@]}"; do
-    if ! command -v "$tool" >/dev/null 2>&1; then
-      if command -v dpkg-query >/dev/null 2>&1; then
-        if ! dpkg-query -s "$tool" >/dev/null 2>&1; then
-          missing+=("$tool")
-        fi
-      else
-        missing+=("$tool")
-      fi
-    fi
-  done
-  printf '%s\n' "${missing[@]}"
-}
-
 check_build_deps() {
   local missing=()
   mapfile -t missing < <(missing_build_deps || true)
@@ -116,6 +93,21 @@ check_build_deps() {
   hint "${missing[*]}"
   hint "para instalar no Debian/Ubuntu/WSL2:"
   hint "sudo apt update && sudo apt install -y ${missing[*]}"
+
+  if command -v sudo >/dev/null 2>&1 && declare -F confirm >/dev/null 2>&1; then
+    if confirm "Deseja instalar as ferramentas de compilação com sudo apt agora?" s; then
+      info "instalando ferramentas de compilação..."
+      if sudo apt-get update && sudo apt-get install -y "${missing[@]}"; then
+        local remaining=()
+        mapfile -t remaining < <(missing_build_deps || true)
+        if [[ ${#remaining[@]} -eq 0 || -z "${remaining[0]:-}" ]]; then
+          ok "ferramentas de compilação instaladas com sucesso"
+          return 0
+        fi
+      fi
+      bad "falha ao instalar ferramentas de compilação via apt"
+    fi
+  fi
   return 1
 }
 
