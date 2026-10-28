@@ -20,7 +20,7 @@ WPCLI_VERSION="2.12.0"       # Plugin WordPress; https://github.com/wp-cli/wp-cl
 WORDPRESS_VERSION=""         # Vazio = versão mais recente estável
 MOODLE_VERSION=""            # Vazio = branch estável mais recente
 MOODLE_BRANCH="503"          # Branch base de busca do Moodle (Moodle 5.3)
-LARAVEL_INSTALLER="5.11.0"   # Plugin Laravel; instalador oficial via Composer
+LARAVEL_INSTALLER="5.32.0"   # Plugin Laravel; instalador oficial via Composer
 
 # Portas padrão.
 # Portas altas para serviços auxiliares evitam colisão com instâncias do sistema.
