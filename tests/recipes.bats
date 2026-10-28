@@ -140,4 +140,41 @@ EOF
   [ ! -f "$TEST_PROJECT/meu-moodle-falha/dev.conf" ]
 }
 
+@test "receita moodle configura php_cli com max_input_vars=5000 e PHPRC no install" {
+  mkdir -p "$DEV_RUNTIME/php/8.4.27/bin"
+  cat << 'EOF' > "$DEV_RUNTIME/php/8.4.27/bin/php"
+#!/usr/bin/env bash
+printf 'ARGS:%s\n' "$*"
+printf 'PHPRC:%s\n' "$PHPRC"
+printf 'SCAN:%s\n' "$PHP_INI_SCAN_DIR"
+EOF
+  chmod +x "$DEV_RUNTIME/php/8.4.27/bin/php"
+
+  libraries '
+    load_recipe moodle
+    export PROJECT_PHP="8.4"
+    download_fresh() { printf "%s\n" "$BATS_TEST_TMPDIR/moodle.tgz"; }
+    tar() {
+      local target="" prev=""
+      for arg in "$@"; do
+        if [ "$prev" = "-C" ]; then target="$arg"; fi
+        prev="$arg"
+      done
+      mkdir -p "$target/admin/cli"
+      touch "$target/admin/cli/install_database.php"
+    }
+    with_progress() {
+      shift
+      "$@"
+    }
+
+    mkdir -p "$BATS_TEST_TMPDIR/proj"
+    output="$(recipe_install "$BATS_TEST_TMPDIR/proj" "moodle-teste" "moodle_db" 2>&1 || true)"
+    [[ "$output" == *"max_input_vars=5000"* ]]
+    [[ "$output" == *"PHPRC:"*"8.4.27"* ]]
+    [[ "$output" == *"SCAN:"*"8.4.27/conf.d"* ]]
+  '
+}
+
+
 

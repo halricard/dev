@@ -36,7 +36,13 @@ wp() {
   local pre=()
   [[ -n "$conf" ]] && pre=(env "WP_CONFIG_PATH=$conf")
 
-  "${pre[@]}" "$(php_bin "$(config_get DEFAULT_PHP)")" \
+  local php_series="${PROJECT_PHP:-$(config_get DEFAULT_PHP)}"
+  local php_ver; php_ver="$(php_version "$php_series")"
+  local php_ini="$DEV_ETC/php/$php_ver/php.ini"
+
+  "${pre[@]}" env PHPRC="$DEV_ETC/php/$php_ver" PHP_INI_SCAN_DIR="$DEV_ETC/php/$php_ver/conf.d" \
+    "$(php_bin "$php_series")" \
+    -c "$php_ini" \
     -d error_reporting="E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED" \
     "$DEV_RUNTIME/wp-cli/wp-cli.phar" --path="$dir" --allow-root "$@" \
     2> >(grep -vE '^(PHP )?(Deprecated|Warning|Notice):.*wp-cli\.phar' >&2)

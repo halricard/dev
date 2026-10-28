@@ -370,11 +370,18 @@ project_path_prefix() {
 }
 
 project_env() {
-  local php
+  local php ver
   php="$(php_bin "$1")" || return 1
   PATH="$(project_path_prefix "$1" "${2:-}"):$PATH"
-  PHP_INI_SCAN_DIR="$DEV_ETC/php/$(basename "$(dirname "$(dirname "$php")")")/conf.d"
-  export PATH PHP_INI_SCAN_DIR
+  ver="$(basename "$(dirname "$(dirname "$php")")")"
+  if ! declare -F write_php_ini >/dev/null && [[ -f "$DEV_ROOT/lib/config.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$DEV_ROOT/lib/config.sh"
+  fi
+  declare -F write_php_ini >/dev/null && write_php_ini "$ver" 2>/dev/null || true
+  PHPRC="$DEV_ETC/php/$ver"
+  PHP_INI_SCAN_DIR="$DEV_ETC/php/$ver/conf.d"
+  export PATH PHPRC PHP_INI_SCAN_DIR
   export_node_env
 }
 

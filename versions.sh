@@ -19,7 +19,7 @@ MKCERT_VERSION="1.4.4"       # https://github.com/FiloSottile/mkcert/releases
 WPCLI_VERSION="2.12.0"       # Plugin WordPress; https://github.com/wp-cli/wp-cli/releases
 WORDPRESS_VERSION=""         # Vazio = versão mais recente estável
 MOODLE_VERSION=""            # Vazio = branch estável mais recente
-MOODLE_BRANCH="502"          # Branch base de busca do Moodle
+MOODLE_BRANCH="503"          # Branch base de busca do Moodle (Moodle 5.3)
 LARAVEL_INSTALLER="5.11.0"   # Plugin Laravel; instalador oficial via Composer
 
 # Portas padrão.

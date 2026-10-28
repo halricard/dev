@@ -260,6 +260,14 @@ cmd_new() {
   [[ -n "$project_php" ]] || project_php="$(series_of "$(config_get DEFAULT_PHP)")"
   ensure_php "$project_php" "$(recipe_title 2>/dev/null || echo "$app")" || return 1
 
+  local php_ver
+  php_ver="$(php_version "$project_php")"
+  if ! declare -F write_php_ini >/dev/null && [[ -f "$DEV_ROOT/lib/config.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$DEV_ROOT/lib/config.sh"
+  fi
+  declare -F write_php_ini >/dev/null && write_php_ini "$php_ver" 2>/dev/null || true
+
   if declare -F recipe_ask >/dev/null; then
     recipe_ask || { info "cancelado pelo usuário"; return 0; }
   fi
@@ -267,6 +275,15 @@ cmd_new() {
   local database="${name//-/_}"
   mkdir -p "$dir"
   create_database "$database"
+
+  export PROJECT_NAME="$name"
+  export PROJECT_APP="$app"
+  export PROJECT_DIR="$dir"
+  export PROJECT_DATABASE="$database"
+  export PROJECT_PHP="$project_php"
+  export PHPRC="$DEV_ETC/php/$php_ver"
+  export PHP_INI_SCAN_DIR="$DEV_ETC/php/$php_ver/conf.d"
+
   recipe_install "$dir" "$name" "$database"
 
   local docroot="."

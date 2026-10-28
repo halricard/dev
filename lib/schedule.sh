@@ -30,7 +30,7 @@ cadence() {
 }
 
 start_task() {
-  local site="$1" type="$2" number="$3" interval="$4" command="$5" dir="$6" path="$7" ini="$8"
+  local site="$1" type="$2" number="$3" interval="$4" command="$5" dir="$6" path="$7" ini="$8" rc="${9:-$(dirname "$8")}"
   local pid log runs script
   local ceiling=60
   (( interval > ceiling )) && ceiling="$interval"
@@ -51,6 +51,7 @@ start_task() {
 # Gerado pelo dev — supervisiona uma tarefa de "$site".
 echo \$\$ > "$pid"
 export PATH="$path:\$PATH"
+export PHPRC="$rc"
 export PHP_INI_SCAN_DIR="$ini"
 [ -f "$CA_CRT" ] && export NODE_EXTRA_CA_CERTS="$CA_CRT"
 cd "$dir" || exit 1
@@ -92,10 +93,12 @@ stop_site_tasks() {
 
 start_site_tasks() {
   local site="$1" dir="$2" php_series="$3" type="${4:-}"
-  local node_series path ini
+  local node_series path ini rc ver_now
   node_series="$(grep -oP '^NODE="?\K[^"]*' "$dir/dev.conf" 2>/dev/null || true)"
   path="$(project_path_prefix "$php_series" "$node_series")"
-  ini="$DEV_ETC/php/$(php_version "$php_series")/conf.d"
+  ver_now="$(php_version "$php_series")"
+  rc="$DEV_ETC/php/$ver_now"
+  ini="$DEV_ETC/php/$ver_now/conf.d"
   local total=0 current number line interval command
   for current in schedule worker; do
     [[ -n "$type" && "$current" != "$type" ]] && continue
@@ -116,7 +119,7 @@ start_site_tasks() {
         fi
       fi
       number=$(( number + 1 )); total=$(( total + 1 ))
-      start_task "$site" "$current" "$number" "$interval" "$command" "$dir" "$path" "$ini"
+      start_task "$site" "$current" "$number" "$interval" "$command" "$dir" "$path" "$ini" "$rc"
     done < <(lines_of_kind "$dir" "$current")
   done
   printf '%s\n' "$total"

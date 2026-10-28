@@ -11,7 +11,7 @@ recipe_docroot() {
 }
 
 branch_for_moodle() {
-  printf '%s\n' "${MOODLE_BRANCH:-502}"
+  printf '%s\n' "${MOODLE_BRANCH:-503}"
 }
 
 recipe_install() {
@@ -26,7 +26,7 @@ recipe_install() {
 
   mkdir -p "$dir/app" "$dir/data"
   chmod 0750 "$dir/data"
-  info "extraindo Moodle ${version:-(branch ${branch:-502})}"
+  info "extraindo Moodle ${version:-(branch ${branch:-503})}"
   tar -xf "$tarball" -C "$dir/app" --strip-components=1 --skip-old-files
 
   local root="$dir/app"
@@ -71,8 +71,20 @@ require_once(__DIR__ . '/lib/setup.php');
 CONF
   fi
 
-  local php; php="$(php_bin "${PROJECT_PHP:-$(config_get DEFAULT_PHP)}")"
-  local php_cli=("$php" -d error_reporting="E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED")
+  local php_series="${PROJECT_PHP:-$(recipe_php 2>/dev/null || config_get DEFAULT_PHP || true)}"
+  local php_ver; php_ver="$(php_version "$php_series")"
+  if ! declare -F write_php_ini >/dev/null && [[ -f "$DEV_ROOT/lib/config.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$DEV_ROOT/lib/config.sh"
+  fi
+  declare -F write_php_ini >/dev/null && write_php_ini "$php_ver" 2>/dev/null || true
+
+  local php; php="$(php_bin "$php_ver")"
+  local php_ini="$DEV_ETC/php/$php_ver/php.ini"
+  local php_cli=(
+    env PHPRC="$DEV_ETC/php/$php_ver" PHP_INI_SCAN_DIR="$DEV_ETC/php/$php_ver/conf.d"
+    "$php" -c "$php_ini" -d max_input_vars=5000 -d error_reporting="E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED"
+  )
 
   ( cd "$root" && "${php_cli[@]}" "$DEV_RUNTIME/composer/composer.phar" install \
       --no-dev --classmap-authoritative --no-interaction >/dev/null 2>&1 ) || true
@@ -110,7 +122,11 @@ recipe_restore() {
   [[ "$(basename "$root")" == public ]] && root="$(dirname "$root")"
   [[ -f "$root/vendor/autoload.php" || ! -f "$root/composer.json" ]] && return 0
   info "repondo o autoloader"
-  ( cd "$root" && "$(php_bin "${PROJECT_PHP:-$(config_get DEFAULT_PHP)}")" "$DEV_RUNTIME/composer/composer.phar" \
+  local php_series="${PROJECT_PHP:-$(recipe_php 2>/dev/null || config_get DEFAULT_PHP || true)}"
+  local php_ver; php_ver="$(php_version "$php_series")"
+  local php_ini="$DEV_ETC/php/$php_ver/php.ini"
+  ( cd "$root" && env PHPRC="$DEV_ETC/php/$php_ver" PHP_INI_SCAN_DIR="$DEV_ETC/php/$php_ver/conf.d" \
+      "$(php_bin "$php_ver")" -c "$php_ini" -d max_input_vars=5000 "$DEV_RUNTIME/composer/composer.phar" \
       install --no-dev --classmap-authoritative --no-interaction >/dev/null 2>&1 ) || true
 }
 
@@ -131,7 +147,12 @@ recipe_change_password() {
     bad "o usuário \"$user\" não existe mais neste Moodle"
     return 1
   fi
-  ( cd "$root" && "$(php_bin "${PROJECT_PHP:-$(config_get DEFAULT_PHP)}")" \
+  local php_series="${PROJECT_PHP:-$(recipe_php 2>/dev/null || config_get DEFAULT_PHP || true)}"
+  local php_ver; php_ver="$(php_version "$php_series")"
+  local php_ini="$DEV_ETC/php/$php_ver/php.ini"
+  ( cd "$root" && env PHPRC="$DEV_ETC/php/$php_ver" PHP_INI_SCAN_DIR="$DEV_ETC/php/$php_ver/conf.d" \
+      "$(php_bin "$php_ver")" -c "$php_ini" \
+      -d max_input_vars=5000 \
       -d error_reporting="E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED" \
       admin/cli/reset_password.php --username="$user" --password="$password" >/dev/null )
 }
