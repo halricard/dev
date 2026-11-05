@@ -125,18 +125,25 @@ series_of() { printf '%s\n' "${1%.*}"; }
 
 ensure_php() {
   local series="$1" title="$2" found installed installed_series
-  found="$(php_version "$series")"
-  if [[ -x "$DEV_RUNTIME/php/$found/bin/php" ]]; then
-    return 0
-  fi
-
   declare -F compile_runtime >/dev/null || source "$DEV_ROOT/lib/runtime.sh" 2>/dev/null || true
 
-  # Se o tarball já estiver presente em runtimes/php/, apenas extrai
   local local_tarball=""
   if declare -F runtime_local_tarball >/dev/null; then
     local_tarball="$(runtime_local_tarball php "$series" 2>/dev/null || true)"
   fi
+
+  found="$(php_version "$series")"
+  if [[ -x "$DEV_RUNTIME/php/$found/bin/php" ]]; then
+    # Versão exata no dev.conf é escolha do projeto. Série acompanha o tarball
+    # fixado: é assim que a correção de segurança chega a quem já tem aquele PHP.
+    [[ "$series" != *.*.* && -f "$local_tarball" ]] || return 0
+    runtime_installed php "$series" && return 0
+    install_runtime php "$series" && return 0
+    warn "não consegui atualizar o PHP $series — o projeto segue com o $found"
+    return 0
+  fi
+
+  # Se o tarball já estiver presente em runtimes/php/, apenas extrai
   if [[ -n "$local_tarball" && -f "$local_tarball" ]]; then
     info "instalando PHP $series a partir de runtimes/php/"
     if install_runtime php "$series"; then
@@ -188,7 +195,7 @@ database_credentials() {
 }
 
 cmd_new() {
-  local app="" name="" php_chosen=""
+  local app="" name="" php_chosen="" agent_chosen=""
   if [[ $# -ge 2 ]]; then
     app="$1"
     name="$2"
@@ -201,6 +208,7 @@ cmd_new() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --php) php_chosen="${2:-}"; shift ;;
+      --agent) agent_chosen="${2:-}"; shift ;;
       -*)    die "opção desconhecida: $1" ;;
       *)     [[ -z "$name" ]] && name="$1" ;;
     esac
@@ -310,6 +318,12 @@ cmd_new() {
     recipe_next_steps "$dir" "$name"
   fi
   database_credentials "$database"
+  if [[ -n "$agent_chosen" ]]; then
+    source "$DEV_ROOT/lib/agent.sh"
+    ( load_project "$dir" && cmd_agent add "$agent_chosen" ) || warn "não consegui gerar a skill para $agent_chosen"
+  else
+    hint "dê contexto ao seu agente de IA com: $DEV agent add"
+  fi
   blank
   cmd_open "$name" || true
 }
@@ -506,7 +520,8 @@ project_environment() {
   require_project
   project_env "$PROJECT_PHP" "$PROJECT_NODE" || exit 1
   DATABASE_URL="mysql://$(config_get MYSQL_USER):$(config_get MYSQL_PASSWORD)@127.0.0.1:$MYSQL_PORT/$PROJECT_DATABASE"
-  export DATABASE_URL
+  # Os atalhos de ~/.dev/bin (wp) leem DEV_RUNTIME do ambiente.
+  export DATABASE_URL DEV_RUNTIME
 }
 
 cmd_exec() {

@@ -224,7 +224,8 @@ if [[ "\$1" == "--version" ]]; then
 fi
 if [[ "\$1" == "build" ]]; then
   mkdir -p "\$PWD/buildroot/bin"
-  touch "\$PWD/buildroot/bin/php" "\$PWD/buildroot/bin/php-fpm"
+  echo "echo 8.4.27" > "\$PWD/buildroot/bin/php"
+  cp "\$PWD/buildroot/bin/php" "\$PWD/buildroot/bin/php-fpm"
   chmod +x "\$PWD/buildroot/bin/php" "\$PWD/buildroot/bin/php-fpm"
   exit 0
 fi
@@ -246,10 +247,102 @@ SCRIPT
   ' _ "$ROOT"
   [ "$status" -eq 0 ]
   [[ "$output" == *"install-pkg pkg-config (SPC_LIBC=glibc)"* ]]
-  [[ "$output" == *"download --with-php=8.4"* ]]
+  [[ "$output" == *"download --with-php=8.4.27 "* ]]
   [[ "$output" == *"build --build-cli --build-fpm"*"opcache"* ]]
   [[ "$output" == *"runtime salvo em runtimes/php/php-8.4.27-linux-x86_64.tar.xz"* ]]
 }
 
+@test "compile_runtime rele o manifesto reescrito pelo build antes de instalar" {
+  local fake_root="$BATS_TEST_TMPDIR/root"
+  mkdir -p "$fake_root/tools" "$fake_root/runtimes"
+  cat > "$fake_root/tools/build-runtimes.sh" <<'SCRIPT'
+#!/usr/bin/env bash
+echo 'PHP_RUNTIME_SHA256="sha-novo"' > "$DEV_ROOT/runtimes/manifest.sh"
+SCRIPT
+  chmod +x "$fake_root/tools/build-runtimes.sh"
 
+  run bash -c '
+    DEV_ROOT="$2"; export DEV_ROOT
+    source "$1/lib/common.sh"
+    source "$1/lib/runtime.sh"
+    PHP_RUNTIME_SHA256="sha-antigo"
+    install_runtime() { echo "sha=$PHP_RUNTIME_SHA256"; }
+    compile_runtime php 8.5
+  ' _ "$ROOT" "$fake_root"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"sha=sha-novo"* ]]
+}
 
+# Roda build_php_runtime 8.4 com um spc falso. O binário "compilado" informa a
+# versão $1 (vazio = o spc não produz binário) e o spc build termina com o status
+# $2. $3 é a glibc do manifesto e $4 o símbolo de glibc gravado no binário.
+run_mock_build() {
+  local reported="$1" build_status="$2" glibc_floor="${3:-}" symbol="${4:-}"
+  MOCK_DIR="$BATS_TEST_TMPDIR/mock"
+  mkdir -p "$MOCK_DIR/dev/runtimes/php" "$MOCK_DIR/build/spc-bin"
+  cat > "$MOCK_DIR/build/spc-bin/spc" <<SCRIPT
+#!/usr/bin/env bash
+if [[ "\$1" == "build" && -n "$reported" ]]; then
+  mkdir -p "\$PWD/buildroot/bin"
+  printf '#!/usr/bin/env bash\n# %s\necho %s\n' "$symbol" "$reported" > "\$PWD/buildroot/bin/php"
+  cp "\$PWD/buildroot/bin/php" "\$PWD/buildroot/bin/php-fpm"
+  chmod +x "\$PWD/buildroot/bin/php" "\$PWD/buildroot/bin/php-fpm"
+fi
+[[ "\$1" == "build" ]] && exit $build_status
+exit 0
+SCRIPT
+  chmod +x "$MOCK_DIR/build/spc-bin/spc"
+
+  run bash -c '
+    ROOT="$1" PHP_RUNTIME_GLIBC="$2"
+    DEV_ROOT="$3/dev" WDEV_BUILD_DIR="$3/build"
+    export DEV_ROOT WDEV_BUILD_DIR
+    source "$ROOT/lib/common.sh"
+    source "$ROOT/lib/runtime.sh"
+    source "$ROOT/tools/build-runtimes.sh"
+    build_php_runtime 8.4 0 1
+  ' _ "$ROOT" "$glibc_floor" "$MOCK_DIR"
+}
+
+@test "build_php_runtime recusa binario cuja versao difere da fixada" {
+  run_mock_build 8.4.26 0
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"informa PHP 8.4.26, mas o alvo é 8.4.27"* ]]
+  [ ! -e "$MOCK_DIR/dev/runtimes/php/php-8.4.26-linux-x86_64.tar.xz" ]
+  [ ! -e "$MOCK_DIR/dev/runtimes/php/php-8.4.27-linux-x86_64.tar.xz" ]
+}
+
+@test "build_php_runtime aborta quando o spc build falha, mesmo com binario presente" {
+  run_mock_build 8.4.27 1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"a compilação do PHP 8.4.27 falhou"* ]]
+  [ ! -e "$MOCK_DIR/dev/runtimes/php/php-8.4.27-linux-x86_64.tar.xz" ]
+}
+
+@test "build_php_runtime nao empacota binario velho de build anterior" {
+  local stale
+  for stale in "$BATS_TEST_TMPDIR/mock/build/php-8.4.27/buildroot/bin" "$BATS_TEST_TMPDIR/mock/build/buildroot/bin"; do
+    mkdir -p "$stale"
+    printf '#!/usr/bin/env bash\necho 8.4.27\n' > "$stale/php"
+    cp "$stale/php" "$stale/php-fpm"
+    chmod +x "$stale/php" "$stale/php-fpm"
+  done
+
+  run_mock_build "" 0
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"não produziu os binários esperados"* ]]
+  [ ! -e "$MOCK_DIR/dev/runtimes/php/php-8.4.27-linux-x86_64.tar.xz" ]
+}
+
+@test "build_php_runtime recusa binario que exige glibc acima da do manifesto" {
+  run_mock_build 8.4.27 0 2.38 GLIBC_2.43
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"exige glibc 2.43, acima da 2.38 do manifesto"* ]]
+  [ ! -e "$MOCK_DIR/dev/runtimes/php/php-8.4.27-linux-x86_64.tar.xz" ]
+}
+
+@test "build_php_runtime aceita binario dentro da glibc do manifesto" {
+  run_mock_build 8.4.27 0 2.38 GLIBC_2.38
+  [ "$status" -eq 0 ]
+  [ -f "$MOCK_DIR/dev/runtimes/php/php-8.4.27-linux-x86_64.tar.xz" ]
+}

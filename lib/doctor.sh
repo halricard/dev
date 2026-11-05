@@ -21,6 +21,22 @@ runtime_line() {
   fi
 }
 
+# Compilar PHP depende destas ferramentas mesmo antes do primeiro install. Com
+# terminal, o doctor se oferece para instalá-las; sem terminal, só aponta a falta.
+build_tools_line() {
+  local missing=()
+  mapfile -t missing < <(missing_build_deps || true)
+  if [[ ${#missing[@]} -eq 0 || -z "${missing[0]:-}" ]]; then
+    ok "$(printf '%-10s %s' "build-tools" "ferramentas de compilação presentes")"
+  elif check_build_deps; then
+    ok "$(printf '%-10s %s' "build-tools" "ferramentas de compilação instaladas")"
+  else
+    warn "$(printf '%-10s %s' "build-tools" "faltam ${#missing[@]} ferramenta(s) de compilação")"
+    hint "$DEV doctor   num terminal, oferece a instalação"
+    problems=$(( problems + 1 ))
+  fi
+}
+
 cmd_doctor() {
   source "$DEV_ROOT/lib/config.sh"
   source "$DEV_ROOT/lib/services.sh"
@@ -31,7 +47,9 @@ cmd_doctor() {
   if [[ -d "$DEV_RUNTIME" ]]; then
     ok "sandbox  $DEV_HOME  $(du -sh "$DEV_HOME" 2>/dev/null | cut -f1 || true)"
   else
-    bad "nada instalado"; hint "$DEV install"; return 1
+    bad "nada instalado"; hint "$DEV install"
+    build_tools_line
+    return 1
   fi
   runtime_line php PHP
   runtime_line nginx nginx
@@ -68,16 +86,7 @@ cmd_doctor() {
   present "Adminer"  "$DEV_HOME/adminer/adminer.php"        "$ADMINER_VERSION"
   present "Composer" "$DEV_RUNTIME/composer/composer.phar"  "$COMPOSER_VERSION"
 
-  local build_missing=()
-  mapfile -t build_missing < <(missing_build_deps || true)
-  if [[ ${#build_missing[@]} -eq 0 || -z "${build_missing[0]:-}" ]]; then
-    ok "$(printf '%-10s %s' "build-tools" "ferramentas de compilação presentes")"
-  else
-    warn "$(printf '%-10s %s' "build-tools" "faltam ${#build_missing[@]} ferramenta(s) de compilação")"
-    hint "$DEV install   instala ferramentas faltantes"
-    hint "ou instale: sudo apt install ${build_missing[*]}"
-    problems=$(( problems + 1 ))
-  fi
+  build_tools_line
 
   if [[ "$DEV" == dev ]]; then
     ok "$(printf '%-10s %s' "comando" "dev no PATH")"

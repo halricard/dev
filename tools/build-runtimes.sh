@@ -33,6 +33,11 @@ if [[ -f "$DEV_ROOT/lib/runtime.sh" ]]; then
   source "$DEV_ROOT/lib/runtime.sh"
 fi
 
+if [[ -f "$DEV_ROOT/runtimes/manifest.sh" ]]; then
+  # shellcheck source=runtimes/manifest.sh
+  source "$DEV_ROOT/runtimes/manifest.sh"
+fi
+
 PHP_STANDARD_EXTENSIONS="bcmath bz2 calendar core ctype curl date dom exif fileinfo filter ftp gd hash iconv intl json lexbor libxml mbstring mysqli mysqlnd opcache openssl pcntl pcre pdo pdo_mysql phar posix random readline reflection session simplexml soap sockets sodium spl standard tokenizer uri xml xmlreader xmlwriter xsl zip zlib"
 
 # Cores e estilização consistentes com lib/common.sh
@@ -79,36 +84,6 @@ usage() {
     gcc g++ make autoconf automake libtool bison re2c flex autopoint cmake pkg-config xz-utils bzip2
 
 TXT
-}
-
-check_build_deps() {
-  local missing=()
-  mapfile -t missing < <(missing_build_deps || true)
-  if [[ ${#missing[@]} -eq 0 || -z "${missing[0]:-}" ]]; then
-    ok "ferramentas de compilação do sistema presentes"
-    return 0
-  fi
-
-  warn "faltam ${#missing[@]} ferramentas de compilação no sistema:"
-  hint "${missing[*]}"
-  hint "para instalar no Debian/Ubuntu/WSL2:"
-  hint "sudo apt update && sudo apt install -y ${missing[*]}"
-
-  if command -v sudo >/dev/null 2>&1 && declare -F confirm >/dev/null 2>&1; then
-    if confirm "Deseja instalar as ferramentas de compilação com sudo apt agora?" s; then
-      info "instalando ferramentas de compilação..."
-      if sudo apt-get update && sudo apt-get install -y "${missing[@]}"; then
-        local remaining=()
-        mapfile -t remaining < <(missing_build_deps || true)
-        if [[ ${#remaining[@]} -eq 0 || -z "${remaining[0]:-}" ]]; then
-          ok "ferramentas de compilação instaladas com sucesso"
-          return 0
-        fi
-      fi
-      bad "falha ao instalar ferramentas de compilação via apt"
-    fi
-  fi
-  return 1
 }
 
 resolve_php_version() {
@@ -226,12 +201,21 @@ package_php_runtime() {
     php_bin="$src_dir/php"
   fi
 
+  # Versão fixada e binário têm de coincidir: renomear um build antigo é o que
+  # faz um tarball prometer uma correção de segurança que não traz.
+  local detected_ver=""
   if [[ -n "$php_bin" ]]; then
-    local detected_ver
-    detected_ver="$("$php_bin" -r 'echo PHP_VERSION;' 2>/dev/null || true)"
-    if [[ -n "$detected_ver" ]]; then
-      version="$detected_ver"
-    fi
+    detected_ver="$("$php_bin" -n -r 'echo PHP_VERSION;' 2>/dev/null || true)"
+  fi
+  [[ "$detected_ver" == "$version" ]] \
+    || die "o binário compilado informa PHP ${detected_ver:-desconhecido}, mas o alvo é $version — nada foi empacotado"
+
+  # A exigência de glibc do manifesto vale para todos os tarballs. Um build feito
+  # em distribuição mais nova não roda em quem o manifesto promete atender.
+  local glibc_floor="${PHP_RUNTIME_GLIBC:-}" required_glibc=""
+  [[ -z "$glibc_floor" ]] || required_glibc="$(binary_required_glibc "$php_bin")"
+  if [[ -n "$required_glibc" && "$(printf '%s\n%s\n' "$required_glibc" "$glibc_floor" | sort -V | tail -1 || true)" != "$glibc_floor" ]]; then
+    die "o binário exige glibc $required_glibc, acima da $glibc_floor do manifesto — compile numa distribuição mais antiga"
   fi
 
   local target_dir="$DEV_ROOT/runtimes/php"
@@ -338,36 +322,26 @@ build_php_runtime() {
   "$spc" install-pkg pkg-config >"$work_dir/pkg-config.log" 2>&1 || true
 
   info "baixando código-fonte oficial do PHP $version e dependências..."
-  "$spc" download --with-php="$series" --for-extensions="$exts_comma" --prefer-pre-built >"$work_dir/download.log" 2>&1 || {
-    "$spc" download --with-php="$series" php-src,openssl,curl,libxml2,zlib,libzip,bzip2,icu,oniguruma,libsodium,libpng,libjpeg,freetype >>"$work_dir/download.log" 2>&1 || true
+  "$spc" download --with-php="$version" --for-extensions="$exts_comma" --prefer-pre-built >"$work_dir/download.log" 2>&1 || {
+    "$spc" download --with-php="$version" php-src,openssl,curl,libxml2,zlib,libzip,bzip2,icu,oniguruma,libsodium,libpng,libjpeg,freetype >>"$work_dir/download.log" 2>&1 || true
   }
+
+  local build_out="$work_dir/buildroot"
+  rm -f "$build_out/bin/php" "$build_out/bin/php-fpm" "$build_out/sbin/php-fpm"
 
   info "iniciando compilação estática com glibc (isso pode levar alguns minutos)..."
   if ! "$spc" build --build-cli --build-fpm "$exts_comma" >"$work_dir/build.log" 2>&1; then
-    warn "a compilação direta via spc falhou ou requer bibliotecas adicionais"
-    hint "consulte o log detalhado em $work_dir/build.log"
+    die "a compilação do PHP $version falhou — consulte o log em $work_dir/build.log"
   fi
 
   cd "$prev_dir"
 
-  local build_out="$work_dir/buildroot"
   if [[ -x "$build_out/bin/php" && (-x "$build_out/bin/php-fpm" || -x "$build_out/sbin/php-fpm") ]]; then
     package_php_runtime "$version" "$build_out"
     return 0
   fi
 
-  if [[ -x "$BUILD_DIR/buildroot/bin/php" && (-x "$BUILD_DIR/buildroot/bin/php-fpm" || -x "$BUILD_DIR/buildroot/sbin/php-fpm") ]]; then
-    package_php_runtime "$version" "$BUILD_DIR/buildroot"
-    return 0
-  fi
-
-  # Fallback caso já tenhamos os binários gerados ou mock em ambiente de teste
-  if [[ -x "$work_dir/bin/php" && (-x "$work_dir/bin/php-fpm" || -x "$work_dir/sbin/php-fpm") ]]; then
-    package_php_runtime "$version" "$work_dir"
-    return 0
-  fi
-
-  die "a compilação do PHP $version não produziu os binários esperados em $BUILD_DIR"
+  die "a compilação do PHP $version não produziu os binários esperados em $build_out"
 }
 
 cmd_main() {

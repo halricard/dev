@@ -141,9 +141,51 @@ load helper
     mkdir -p "$DEV_RUNTIME/php/8.4.27/bin"
     touch "$DEV_RUNTIME/php/8.4.27/bin/php"
     chmod +x "$DEV_RUNTIME/php/8.4.27/bin/php"
+    runtime_sha256 php 8.4 > "$DEV_RUNTIME/php/8.4.27/.installed"
+    install_runtime() { echo "install_runtime $*"; }
     ensure_php "8.4" "Moodle"
   '
   [ "$status" -eq 0 ]
+  [[ "$output" != *"install_runtime"* ]]
+}
+
+@test "ensure_php atualiza serie instalada quando o tarball fixado mudou" {
+  run libraries '
+    source "$DEV_ROOT/lib/project.sh"
+    mkdir -p "$DEV_RUNTIME/php/8.4.6/bin"
+    touch "$DEV_RUNTIME/php/8.4.6/bin/php"
+    chmod +x "$DEV_RUNTIME/php/8.4.6/bin/php"
+    install_runtime() { echo "install_runtime $*"; }
+    ensure_php "8.4" "Moodle"
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"install_runtime php 8.4"* ]]
+}
+
+@test "ensure_php segue com o PHP atual quando a atualizacao falha" {
+  run libraries '
+    source "$DEV_ROOT/lib/project.sh"
+    mkdir -p "$DEV_RUNTIME/php/8.4.6/bin"
+    touch "$DEV_RUNTIME/php/8.4.6/bin/php"
+    chmod +x "$DEV_RUNTIME/php/8.4.6/bin/php"
+    install_runtime() { return 1; }
+    ensure_php "8.4" "Moodle"
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"não consegui atualizar o PHP 8.4 — o projeto segue com o 8.4.6"* ]]
+}
+
+@test "ensure_php respeita versao exata escolhida no dev.conf" {
+  run libraries '
+    source "$DEV_ROOT/lib/project.sh"
+    mkdir -p "$DEV_RUNTIME/php/8.4.6/bin"
+    touch "$DEV_RUNTIME/php/8.4.6/bin/php"
+    chmod +x "$DEV_RUNTIME/php/8.4.6/bin/php"
+    install_runtime() { echo "install_runtime $*"; }
+    ensure_php "8.4.6" "Moodle"
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"install_runtime"* ]]
 }
 
 @test "ensure_php com confirmacao do usuario aciona compile_runtime" {

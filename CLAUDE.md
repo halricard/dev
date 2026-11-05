@@ -41,5 +41,6 @@ O comando principal se chama `dev`.
 - `dev` é o despachante principal que carrega bibliotecas modulares em `lib/` e despacha subcomandos.
 - `lib/common.sh`: base com caminhos `DEV_*`, utilitários de saída e leitura de `dev.conf`.
 - `lib/plugins.sh`: gerenciador do catálogo e ciclo de vida de plugins em `plugins/`.
-- `plugins/<app>/`: plugins de aplicação contendo `plugin.sh` (ferramentas e ciclo de vida) e `recipe.sh` (scaffolding e hooks de projeto).
+- `plugins/<app>/`: plugins de aplicação contendo `plugin.sh` (ferramentas e ciclo de vida), `recipe.sh` (scaffolding e hooks de projeto) e `agent.md` (notas em inglês da aplicação para a skill de agentes).
+- `lib/agent.sh` e `lib/agent/skill.md`: `dev agent` gera `SKILL.md` no projeto (`.claude/skills/dev`, `.agents/skills/dev` para Codex, `.agent/skills/dev` para Antigravity). O conteúdo da skill é em inglês, lido pelo agente.
 - Estado em `~/.dev`, cache de download em `~/.cache/dev`.

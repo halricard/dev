@@ -11,6 +11,7 @@
 #   dev start | stop | status
 #   dev fix                     recupera o ambiente meio de pé
 #   dev doctor
+#   dev agent add               gera a skill do dev para Claude, Codex ou Antigravity
 #
 # Nomes em inglês, prosa em português (contrato do CLAUDE.md).
 
@@ -60,7 +61,7 @@ usage() {
     restart             stop e start — aplica conf.d/local.ini editado
     status              o que está rodando
     fix                 recupera a máquina meio de pé (-f encerra intrusos)
-    doctor              diagnostica o que costuma quebrar
+    doctor              diagnostica o que costuma quebrar e instala as ferramentas de compilação
     versions            o que está fixado vs. o que foi publicado
     uninstall           remove o sandbox
 
@@ -95,6 +96,12 @@ usage() {
     open mail           abre o Mailpit (e-mails capturados)
     open db             abre o Adminer direto no banco do projeto
     autostart on|off    sobe a pilha no início do sistema
+
+  ${C_BOLD:-}AGENTES DE IA${C_RESET:-}
+    agent add [alvo]    gera a skill do dev no projeto: claude, codex, antigravity ou all
+    agent remove [alvo] remove a skill gerada pelo dev
+    agent update        regenera as skills depois de mudar o dev.conf
+    agent list          mostra onde a skill está instalada
 
   ${C_BOLD:-}PRIMEIROS PASSOS${C_RESET:-}
     → dev install
@@ -191,6 +198,10 @@ case "$subcommand" in
   passwd)
     source "$DEV_ROOT/lib/passwd.sh"
     cmd_passwd "$@"
+    ;;
+  agent)
+    source "$DEV_ROOT/lib/agent.sh"
+    cmd_agent "$@"
     ;;
   autostart)
     source "$DEV_ROOT/lib/autostart.sh"

@@ -77,7 +77,7 @@ dev stop                encerra os serviços da máquina
 dev restart             stop e start — aplica conf.d/local.ini editado
 dev status              o que está rodando
 dev fix                 recupera a máquina meio de pé (-f encerra intrusos)
-dev doctor              diagnostica o que costuma quebrar
+dev doctor              diagnostica o que costuma quebrar e instala as ferramentas de compilação
 dev versions            o que está fixado vs. o que foi publicado
 dev uninstall           remove o sandbox
 dev plugin              gerenciador de plugins (list, install, remove)
@@ -103,6 +103,7 @@ dev db                  consulta (query), exporta ou importa banco
 dev passwd              redefine a senha do admin
 dev open                abre o site, mailpit ou adminer no navegador
 dev autostart           sobe a pilha no início do sistema
+dev agent               gera a skill do dev para Claude, Codex ou Antigravity (add, remove, update, list)
 ```
 
 ---

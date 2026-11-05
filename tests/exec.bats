@@ -77,3 +77,11 @@ EOF
   [[ "$output" == *"shell do projeto test-site"* ]]
   [[ "$output" == *"OK=mysql://"*"/shelldb"* ]]
 }
+
+@test "dev exec exporta DEV_RUNTIME para os atalhos de ~/.dev/bin" {
+  cd "$TEST_PROJECT"
+  project_conf PHP="8.5.11"
+  run dev_cmd exec bash -c 'echo "runtime=$DEV_RUNTIME"'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"runtime=$DEV_HOME/runtime"* ]]
+}

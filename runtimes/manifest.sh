@@ -4,7 +4,7 @@
 
 PHP_RUNTIME_VERSION="8.5.12"
 PHP_RUNTIME_FILE="php/php-8.5.12-linux-x86_64.tar.xz"
-PHP_RUNTIME_SHA256="e5bec4fb337ec0c52c8d5b68ab8a76d51dc9c529b8f32d3be014f5d82da994bb"
+PHP_RUNTIME_SHA256="06e69b4675d6b68edb785e1c17206fcadf600c9a6bd2b69651981113219322b7"
 PHP_RUNTIME_URL=""
 # A glibc com que o binário foi linkado. Ele é estático em tudo o mais — OpenSSL,
 # ICU, curl, gd e companhia estão dentro —, então esta é a única exigência da

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Provisionamento do core do dev dentro de $DEV_HOME.
 #
-# Runtimes pré-compilados e binários oficiais. Não compila nada do fonte.
+# Runtimes pré-compilados e binários oficiais. Só compila do fonte quando o tarball
+# do repositório é recusado e o usuário aceita.
 
 if [[ -f "$DEV_ROOT/lib/runtime.sh" ]] && ! declare -p APT_BUILD_DEPS >/dev/null 2>&1; then
   # shellcheck source=lib/runtime.sh
@@ -179,9 +180,47 @@ install_adminer() {
   ok "Adminer $version"
 }
 
+# Tarball recusado pela verificação (versão errada, glibc acima da máquina) não
+# precisa parar o install: o fonte oficial resolve os dois casos, e as ferramentas
+# de compilação já vieram com as dependências do sistema.
+install_php_runtime() {
+  local series="${1:-}" version
+  install_runtime php "$series" && return 0
+  version="$(runtime_version php "$series")"
+  confirm "Deseja compilar o PHP $version a partir do fonte oficial agora?" s || return 1
+  compile_runtime php "${version%.*}"
+}
+
+# Séries além da padrão só estão na máquina porque algum projeto pediu. O install
+# as atualiza junto, para a correção de segurança não ficar à espera de um up.
+installed_extra_php_series() {
+  local default_version="${PHP_RUNTIME_VERSION:-}" candidate series
+  for candidate in "$DEV_RUNTIME/php"/*/; do
+    [[ -d "$candidate" ]] || continue
+    candidate="${candidate%/}"
+    series="${candidate##*/}"
+    series="${series%.*}"
+    [[ "$series" == "${default_version%.*}" ]] || printf '%s\n' "$series"
+  done | sort -u || true
+}
+
+upgrade_extra_php_series() {
+  local series tarball
+  while IFS= read -r series; do
+    [[ -n "$series" ]] || continue
+    tarball="$(runtime_local_tarball php "$series" || true)"
+    if [[ -f "$tarball" ]]; then
+      install_php_runtime "$series" || return 1
+    else
+      warn "PHP $series instalado, mas sem tarball em runtimes/php/ — fica como está"
+    fi
+  done < <(installed_extra_php_series)
+}
+
 install_own_runtime() {
   local php_version nginx_version
-  install_runtime php || return 1
+  install_php_runtime || return 1
+  upgrade_extra_php_series || return 1
   install_runtime nginx || return 1
   grant_net_bind_capability || true
   php_version="$(runtime_version php)"
@@ -277,6 +316,12 @@ cmd_install() {
     "Adminer"  "$ADMINER_VERSION"         "cliente de banco no navegador" \
     "Composer" "$COMPOSER_VERSION"        "gerenciador de dependências PHP" \
     "mkcert"   "$MKCERT_VERSION"          "confere autoridade HTTPS local"
+  local extra_series
+  while IFS= read -r extra_series; do
+    [[ -n "$extra_series" ]] || continue
+    printf "  %-10s %-10s ${C_DIM}%s${C_RESET}\n" \
+      "PHP" "$(runtime_version php "$extra_series")" "série adicional já instalada"
+  done < <(installed_extra_php_series)
   blank
   hint "aplicações específicas (moodle, laravel, wordpress) são instaladas via plugins"
   hint "após o install: dev plugin list"

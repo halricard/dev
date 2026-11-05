@@ -95,7 +95,7 @@ th { background: var(--code); color: var(--fg); font-weight: 600; }
   <p class="scope machine">na máquina</p>
   <div class="term"><span class="pr">$</span> <span class="in">./dev install</span>
 <span class="out">  ▸ COMPONENTES DO CORE
-  ✔  PHP 8.5.11
+  ✔  PHP 8.5.12
   ✔  nginx 1.30.5
   ✔  MySQL 8.4.9
   ✔  Node.js LTS
@@ -110,7 +110,7 @@ th { background: var(--code); color: var(--fg); font-weight: 600; }
     <tr><td><code>dev stop</code></td><td>Encerra todos os serviços da máquina</td></tr>
     <tr><td><code>dev restart</code></td><td>Reinicia o ambiente para recarregar ajustes de configuração</td></tr>
     <tr><td><code>dev status</code></td><td>Verifica o estado atual dos serviços</td></tr>
-    <tr><td><code>dev doctor</code></td><td>Diagnostica configurações, permissões e rede</td></tr>
+    <tr><td><code>dev doctor</code></td><td>Diagnostica configurações, permissões e rede, e instala as ferramentas de compilação</td></tr>
     <tr><td><code>dev fix</code></td><td>Recupera processos travados ou portas conflitantes</td></tr>
     <tr><td><code>dev versions</code></td><td>Compara versões locais com as fixadas no catálogo</td></tr>
     <tr><td><code>dev autostart</code></td><td>Configura inicialização automática no boot (<code>on</code>, <code>off</code>, <code>status</code>)</td></tr>
@@ -211,6 +211,8 @@ th { background: var(--code); color: var(--fg); font-weight: 600; }
     <tr><td><code>dev db import &lt;arq&gt;</code></td><td>Projeto</td><td>Importa um dump SQL para o banco do projeto</td></tr>
     <tr><td><code>dev passwd</code></td><td>Projeto</td><td>Redefine com segurança a senha do administrador da aplicação</td></tr>
     <tr><td><code>dev open [mail|db]</code></td><td>Projeto</td><td>Abre o site no navegador, ou as ferramentas Mailpit / Adminer</td></tr>
+    <tr><td><code>dev agent add [alvo]</code></td><td>Projeto</td><td>Gera a skill do dev para um agente de IA (<code>claude</code>, <code>codex</code>, <code>antigravity</code> ou <code>all</code>); sem alvo, pergunta. Também em <code>dev new --agent &lt;alvo&gt;</code></td></tr>
+    <tr><td><code>dev agent remove|update|list</code></td><td>Projeto</td><td>Remove a skill gerada, a regenera após mudar o <code>dev.conf</code> ou mostra onde está instalada</td></tr>
   </table>
 </section>
 

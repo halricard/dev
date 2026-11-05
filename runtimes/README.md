@@ -46,12 +46,13 @@ contrária).
 ## Como regerar
 
 ```bash
-tools/build-runtimes.sh php      # PHP 8.5.x estático, com FPM
+tools/build-runtimes.sh php 8.5  # PHP 8.5.x estático, com FPM; reescreve manifest.sh e SHA256SUMS
+tools/build-runtimes.sh php 8.4  # PHP 8.4.x estático, com FPM; reescreve SHA256SUMS
 tools/build-runtimes.sh nginx    # nginx estático
-tools/build-runtimes.sh all      # os dois, e reescreve o manifesto e o SHA256SUMS
 ```
 
-Requisitos, uma vez só, na máquina que builda (não em quem instala):
+Requisitos, uma vez só, na máquina que builda (não em quem instala). O `dev doctor`,
+o `dev install` e o próprio script se oferecem para instalá-los:
 
 ```
 gcc g++ make autoconf automake libtool bison re2c flex autopoint cmake pkg-config
@@ -65,12 +66,19 @@ root) — o `spc` também quer o `pkg-config` isolado dele, que se instala sem r
 com `spc install-pkg pkg-config`.
 
 O build leva uns 20 minutos, e o resultado fica em
-`$WDEV_BUILD_DIR/buildroot/bin/` (por padrão `/tmp/wdev-runtimes`): é de lá que
-o script colhe `php`, `php-fpm` e o binário do nginx.
+`/var/tmp/wdev-runtimes/php-<versão>/buildroot/bin/`: é de lá que o script colhe
+`php` e `php-fpm`.
 
-Ao subir a versão do PHP: mude `PHP_SERIES` no script, rode com `all`, e abra um
-PR com o tarball, o `manifest.sh` e o `SHA256SUMS` novos. **Nada se atualiza
-sozinho** — é o número fixado no git que faz a máquina de todo mundo ser a mesma.
+Ao subir a versão do PHP: mude o número da série em `resolve_php_version`
+(`tools/build-runtimes.sh`) e em `runtime_version` (`lib/runtime.sh`), rode o
+build e abra um PR com o tarball, o `manifest.sh` e o `SHA256SUMS` novos. **Nada
+se atualiza sozinho** — é o número fixado no git que faz a máquina de todo mundo
+ser a mesma.
+
+O script compila exatamente a versão fixada e recusa empacotar um binário que
+informe outra versão. O install repete a conferência, com o `php` e o `php-fpm`
+extraídos. Por isso, **nunca renomeie um tarball para subir de versão**: o nome
+não traz a correção de segurança, e o install recusa o arquivo.
 
 ## A glibc, e por que ela é a única exigência
 
@@ -80,8 +88,9 @@ gd, zip, sodium e o resto estão dentro do binário — `ldd` mostra só `libc`,
 sistema, e por isso o binário exige uma versão mínima dela (hoje **2.38**: Ubuntu
 24.04 é 2.39, Debian 13 é 2.41, Ubuntu 22.04 é 2.35 e **não** roda).
 
-O `manifest.sh` declara essa versão em `PHP_RUNTIME_GLIBC`, e o `install` a
-confere antes de extrair — a mensagem diz o que fazer, em vez de "não executa".
+O `manifest.sh` declara essa versão em `PHP_RUNTIME_GLIBC`, e o build recusa um
+binário que exija mais do que ela. O `install` confere a exigência real de cada
+binário — a mensagem diz o que fazer, em vez de "não executa".
 
 Para servir um time em distribuições mais antigas, quem mantém roda o script na
 **mais antiga** delas e commita o tarball gerado: o binário construído numa glibc

@@ -104,6 +104,12 @@ glibc_too_old() {
   [[ "$(printf '%s\n%s\n' "$required" "$have" | sort -V | head -1 || true)" != "$required" ]]
 }
 
+# A glibc que o binário realmente pede, lida da sua tabela de símbolos. O
+# manifesto declara uma exigência única; esta é a de cada tarball.
+binary_required_glibc() {
+  grep -aoE 'GLIBC_[0-9]+\.[0-9]+' "$1" 2>/dev/null | sed 's/^GLIBC_//' | sort -V | tail -1 || true
+}
+
 runtime_expected_extensions() {
   local ver="${1:-}"
   local exts="${PHP_RUNTIME_EXTENSIONS:-}"
@@ -197,15 +203,25 @@ runtime_verify() {
     php)
       php="$dir/bin/php"
       [[ -x "$php" ]] || die "o tarball do PHP não tem bin/php"
-      local required_glibc
-      required_glibc="$(runtime_glibc)"
+      local required_glibc expected_version actual_version fpm_banner
+      required_glibc="$(binary_required_glibc "$php")"
+      [[ -n "$required_glibc" ]] || required_glibc="$(runtime_glibc)"
       if [[ -n "$required_glibc" ]] && glibc_too_old "$required_glibc"; then
-        die "este runtime do PHP exige glibc $required_glibc ou superior"
+        die "este runtime do PHP exige glibc $required_glibc ou superior — regenere com tools/build-runtimes.sh nesta máquina"
       fi
       "$php" -v >/dev/null 2>&1 || die "o PHP do runtime não executa nesta máquina"
+      # O nome do tarball não prova nada: é a versão do binário que decide se a
+      # correção de segurança prometida pelo manifesto está mesmo lá dentro.
+      expected_version="$(runtime_version php "$ver")"
+      actual_version="$("$php" -n -r 'echo PHP_VERSION;' 2>/dev/null || true)"
+      [[ "$actual_version" == "$expected_version" ]] \
+        || die "o tarball do PHP $expected_version traz o binário ${actual_version:-desconhecido} — regenere com tools/build-runtimes.sh php ${expected_version%.*}"
       "$php" -v 2>/dev/null | grep -q 'Zend OPcache' || die "o PHP do runtime está sem o OPcache"
       runtime_check_extensions "$php" "$ver"
       [[ -x "$dir/sbin/php-fpm" ]] || die "o tarball do PHP não tem sbin/php-fpm"
+      fpm_banner="$("$dir/sbin/php-fpm" -n -v 2>/dev/null || true)"
+      [[ "$fpm_banner" == "PHP $expected_version "* ]] \
+        || die "o php-fpm do tarball não é o PHP $expected_version"
       ;;
   esac
 }
@@ -244,12 +260,47 @@ missing_build_deps() {
   printf '%s\n' "${missing[@]}"
 }
 
+check_build_deps() {
+  local missing=()
+  mapfile -t missing < <(missing_build_deps || true)
+  if [[ ${#missing[@]} -eq 0 || -z "${missing[0]:-}" ]]; then
+    ok "ferramentas de compilação do sistema presentes"
+    return 0
+  fi
+
+  warn "faltam ${#missing[@]} ferramentas de compilação no sistema:"
+  hint "${missing[*]}"
+  hint "para instalar no Debian/Ubuntu/WSL2:"
+  hint "sudo apt update && sudo apt install -y ${missing[*]}"
+
+  if command -v sudo >/dev/null 2>&1 && declare -F confirm >/dev/null 2>&1; then
+    if confirm "Deseja instalar as ferramentas de compilação com sudo apt agora?" s; then
+      info "instalando ferramentas de compilação..."
+      if sudo apt-get update && sudo apt-get install -y "${missing[@]}"; then
+        local remaining=()
+        mapfile -t remaining < <(missing_build_deps || true)
+        if [[ ${#remaining[@]} -eq 0 || -z "${remaining[0]:-}" ]]; then
+          ok "ferramentas de compilação instaladas com sucesso"
+          return 0
+        fi
+      fi
+      bad "falha ao instalar ferramentas de compilação via apt"
+    fi
+  fi
+  return 1
+}
+
 compile_runtime() {
   local component="$1" version="${2:-}"
   case "$component" in
     php)
       info "iniciando compilação do PHP $version a partir do código-fonte oficial..."
       "$DEV_ROOT/tools/build-runtimes.sh" php "$version" || return 1
+      # O build reescreve o manifesto: o sha lido no início deste processo já não vale.
+      if [[ -f "$DEV_ROOT/runtimes/manifest.sh" ]]; then
+        # shellcheck source=runtimes/manifest.sh
+        source "$DEV_ROOT/runtimes/manifest.sh"
+      fi
       install_runtime php "$version"
       ;;
     *)
@@ -258,9 +309,19 @@ compile_runtime() {
   esac
 }
 
+# O php-fpm no ar segue com o binário antigo em memória mesmo depois da troca do
+# diretório. Encerrado aqui, o próximo start já sobe o novo.
+stop_replaced_fpm() {
+  local version="$1" pidfile="$DEV_RUN/php-fpm-$1.pid"
+  [[ -f "$pidfile" ]] || return 0
+  kill -QUIT "$(cat "$pidfile" 2>/dev/null || true)" 2>/dev/null || true
+  rm -f "$pidfile" "$DEV_RUN/php-$version.sock"
+  info "php-fpm $version encerrado: o próximo start usa o binário novo"
+}
+
 install_runtime() {
   local component="$1" ver="${2:-}"
-  local version dir tarball
+  local version dir tarball previous
   version="$(runtime_version "$component" "$ver")"
   [[ -n "$version" ]] || die "o runtime de $component ainda não está fixado no manifesto"
 
@@ -271,11 +332,22 @@ install_runtime() {
 
   tarball="$(runtime_fetch "$component" "$ver")" || return 1
   dir="$(runtime_dir "$component" "$ver")"
+  # O diretório atual só sai depois que o novo passa na verificação: tarball ruim
+  # não pode deixar a máquina sem o runtime que já funcionava. O ponto inicial no
+  # nome o esconde de quem lista as versões instaladas.
+  previous="$(dirname "$dir")/.previous-$version"
   info "extraindo $component $version"
-  rm -rf "$dir"
+  rm -rf "$previous"
+  [[ ! -d "$dir" ]] || mv "$dir" "$previous"
   mkdir -p "$dir"
-  tar -xf "$tarball" -C "$dir" || die "não consegui extrair $tarball"
-  runtime_verify "$component" "$ver"
+  if ! tar -xf "$tarball" -C "$dir" || ! ( runtime_verify "$component" "$ver" ); then
+    rm -rf "$dir"
+    [[ ! -d "$previous" ]] || mv "$previous" "$dir"
+    bad "$component $version recusado; o que estava instalado continua no lugar"
+    return 1
+  fi
+  rm -rf "$previous"
+  [[ "$component" != php ]] || stop_replaced_fpm "$version"
   runtime_sha256 "$component" "$ver" > "$dir/.installed"
   ok "$component $version"
 }

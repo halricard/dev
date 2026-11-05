@@ -122,6 +122,7 @@ EOF
     source "$DEV_ROOT/lib/runtime.sh"
     mkdir -p "$DEV_RUNTIME"
     missing_build_deps() { echo "gcc"; echo "make"; }
+    confirm() { return 1; }
     IGNORE="runtime.sh" cmd_doctor
   '
   [[ "$output" == *"build-tools"* ]]
@@ -136,6 +137,71 @@ EOF
   '
   [[ "$output" == *"build-tools"* ]]
   [[ "$output" == *"ferramentas de compilação presentes"* ]]
+}
+
+@test "dev doctor instala build-tools quando o usuario confirma" {
+  run libraries '
+    source "$DEV_ROOT/lib/doctor.sh"
+    source "$DEV_ROOT/lib/runtime.sh"
+    mkdir -p "$DEV_RUNTIME"
+    missing_count=1
+    missing_build_deps() { (( missing_count == 0 )) || echo gcc; }
+    confirm() { return 0; }
+    sudo() { echo "sudo $*"; missing_count=0; }
+    IGNORE="runtime.sh" cmd_doctor
+  '
+  [[ "$output" == *"sudo apt-get install -y gcc"* ]]
+  [[ "$output" == *"ferramentas de compilação instaladas"* ]]
+  [[ "$output" != *"faltam 1 ferramenta(s) de compilação"* ]]
+}
+
+@test "dev doctor oferece build-tools mesmo com nada instalado" {
+  run libraries '
+    source "$DEV_ROOT/lib/doctor.sh"
+    source "$DEV_ROOT/lib/runtime.sh"
+    missing_build_deps() { echo gcc; }
+    confirm() { echo "perguntou"; return 1; }
+    IGNORE="runtime.sh" cmd_doctor
+  '
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"nada instalado"* ]]
+  [[ "$output" == *"perguntou"* ]]
+  [[ "$output" == *"faltam 1 ferramenta(s) de compilação"* ]]
+}
+
+@test "install_php_runtime nao compila quando o tarball e aceito" {
+  run libraries '
+    source "$DEV_ROOT/lib/install.sh"
+    install_runtime() { echo "install_runtime $*"; }
+    compile_runtime() { echo "compile_runtime $*"; }
+    install_php_runtime 8.4
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"compile_runtime"* ]]
+}
+
+@test "install_php_runtime compila a serie quando o tarball e recusado e o usuario aceita" {
+  run libraries '
+    source "$DEV_ROOT/lib/install.sh"
+    install_runtime() { return 1; }
+    confirm() { return 0; }
+    compile_runtime() { echo "compile_runtime $*"; }
+    install_php_runtime
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"compile_runtime php 8.5"* ]]
+}
+
+@test "install_php_runtime falha sem compilar quando o usuario recusa" {
+  run libraries '
+    source "$DEV_ROOT/lib/install.sh"
+    install_runtime() { return 1; }
+    confirm() { return 1; }
+    compile_runtime() { echo "compile_runtime $*"; }
+    install_php_runtime 8.4
+  '
+  [ "$status" -ne 0 ]
+  [[ "$output" != *"compile_runtime"* ]]
 }
 
 @test "has_net_bind_capability detecta presenca e ausencia de capability" {
