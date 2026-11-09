@@ -10,6 +10,17 @@ recipe_docroot() {
   printf 'app\n'
 }
 
+# Versão do Moodle instalado, lida do $release de version.php (sem rodar PHP).
+recipe_version() {
+  local file
+  for file in "$1/app/version.php" "$1/app/public/version.php"; do
+    [[ -f "$file" ]] || continue
+    sed -n "/^\$release *= *'/{s/^\$release *= *'\([^ ']*\).*/\1/p;q;}" "$file"
+    return 0
+  done
+  return 1
+}
+
 branch_for_moodle() {
   printf '%s\n' "${MOODLE_BRANCH:-503}"
 }
@@ -200,4 +211,200 @@ recipe_schedule() {
 # Formato:  <intervalo em segundos>  <comando>
 60 php app/admin/cli/cron.php --keep-alive=0
 AGENDA
+}
+
+# ------------------------------------------------------------------- testes
+# PHPUnit e Behat, as duas suítes oficiais do Moodle. Cada uma usa tabelas
+# próprias no mesmo banco (prefixos phpu_ e bht_) e um dataroot próprio ao lado
+# de data/. O Behat abre o site em https://test.<projeto>.localhost pelo Chrome
+# do dev.
+
+moodle_root() {
+  if [[ -d "$1/app" ]]; then printf '%s\n' "$1/app"; else printf '%s\n' "$1"; fi
+}
+
+# Moodle 5.1+ guarda as ferramentas em public/; as versões anteriores, na raiz.
+moodle_tool() {
+  local root candidate
+  root="$(moodle_root "$1")"
+  for candidate in "public/admin/tool/$2" "admin/tool/$2"; do
+    [[ -d "$root/$candidate" ]] && { printf '%s\n' "$candidate"; return 0; }
+  done
+  return 1
+}
+
+MOODLE_TEST_BEGIN="// >>> dev test"
+MOODLE_TEST_END="// <<< dev test"
+
+moodle_test_config_block() {
+  local dir="$1" name="$2" arg args=""
+  while IFS= read -r arg; do
+    args+="'$arg', "
+  done < <(chrome_test_args)
+  cat <<PHP
+$MOODLE_TEST_BEGIN — escrito pelo dev test e reescrito a cada preparo; não edite
+\$CFG->phpunit_prefix   = 'phpu_';
+\$CFG->phpunit_dataroot = '$dir/data-phpunit';
+\$CFG->behat_prefix     = 'bht_';
+\$CFG->behat_dataroot   = '$dir/data-behat';
+\$CFG->behat_wwwroot    = 'https://$(test_host "$name")';
+\$CFG->behat_profiles   = [
+    'default' => [
+        'browser' => 'chrome',
+        'wd_host' => '$(chromedriver_url)',
+        'capabilities' => [
+            'extra_capabilities' => [
+                'goog:chromeOptions' => [
+                    'binary' => '$(chrome_bin)',
+                    'args' => [${args%, }],
+                ],
+            ],
+        ],
+    ],
+];
+$MOODLE_TEST_END
+PHP
+}
+
+# Põe o bloco de testes no config.php, logo antes do require do setup.php.
+# Um config.php que o dev não reconhece fica intocado; o bloco vai para a tela.
+moodle_write_test_config() {
+  local dir="$1" name="$2" config block tmp
+  config="$(moodle_root "$dir")/config.php"
+  block="$(moodle_test_config_block "$dir" "$name")"
+  if [[ ! -f "$config" ]] || ! grep -q "^require_once(__DIR__ . '/lib/setup.php');" "$config"; then
+    bad "não reconheci o config.php — acrescente antes do require_once do setup.php:"
+    printf '%s\n' "$block" | sed 's/^/     /'
+    return 1
+  fi
+  tmp="$(mktemp)"
+  awk -v begin="$MOODLE_TEST_BEGIN" -v end="$MOODLE_TEST_END" -v block="$block" '
+    index($0, begin) == 1 { skip = 1; next }
+    skip && index($0, end) == 1 { skip = 0; next }
+    skip { next }
+    /^require_once\(__DIR__ \. .\/lib\/setup\.php.\);/ { print block; print "" }
+    { print }
+  ' "$config" > "$tmp"
+  cat "$tmp" > "$config"
+  rm -f "$tmp"
+  mkdir -p "$dir/data-phpunit" "$dir/data-behat"
+  chmod 0750 "$dir/data-phpunit" "$dir/data-behat"
+}
+
+# As suítes precisam das dependências de desenvolvimento do Composer, que a
+# criação do projeto deixa de fora. O composer.phar do dev fica ao lado para o
+# init do Moodle não baixar outro da internet.
+moodle_test_dependencies() {
+  local root
+  root="$(moodle_root "$1")"
+  [[ -e "$root/composer.phar" ]] || ln -s "$DEV_RUNTIME/composer/composer.phar" "$root/composer.phar"
+  [[ -x "$root/vendor/bin/phpunit" && -x "$root/vendor/bin/behat" ]] && return 0
+  with_progress "instalando as dependências de teste (composer install)" \
+    env -C "$root" COMPOSER_NO_INTERACTION=1 composer install --no-interaction
+}
+
+recipe_test_suites() {
+  printf '%s\n' \
+    "phpunit|testes unitários e de integração (PHPUnit; tabelas phpu_, dados em data-phpunit/)" \
+    "behat|testes de aceitação no navegador (Behat + Chrome em https://$(test_host "$PROJECT_NAME"))"
+}
+
+recipe_test_ready() {
+  local suite="$1" root tool
+  root="$(moodle_root "$PROJECT_DIR")"
+  grep -q "$MOODLE_TEST_BEGIN" "$root/config.php" 2>/dev/null || return 1
+  tool="$(moodle_tool "$PROJECT_DIR" "$suite")" || return 1
+  ( cd "$root" && php "$tool/cli/util.php" --diag >/dev/null 2>&1 )
+}
+
+recipe_test_init() {
+  local suite="$1" root tool
+  root="$(moodle_root "$PROJECT_DIR")"
+  tool="$(moodle_tool "$PROJECT_DIR" "$suite")" || die "esta versão do Moodle não traz admin/tool/$suite"
+  moodle_write_test_config "$PROJECT_DIR" "$PROJECT_NAME" || return 1
+  moodle_test_dependencies "$PROJECT_DIR" || return 1
+  if [[ "$suite" == behat ]]; then
+    test_require_served
+  fi
+  with_progress "preparando o $suite do Moodle (instala as tabelas de teste)" \
+    env -C "$root" php "$tool/cli/init.php" --disable-composer
+}
+
+recipe_test_run() {
+  local suite="$1"; shift
+  local root
+  root="$(moodle_root "$PROJECT_DIR")"
+  cd "$root" || return 1
+  case "$suite" in
+    phpunit)
+      vendor/bin/phpunit "$@" ;;
+    behat)
+      test_require_served
+      test_browser
+      vendor/bin/behat --config "$PROJECT_DIR/data-behat/behatrun/behat/behat.yml" "$@" ;;
+  esac
+}
+
+# ---------------------------------------------------------- usuário de teste
+moodle_cli_php() {
+  local dir="$1" script="$2"; shift 2
+  local root file
+  root="$(moodle_root "$dir")"
+  file="$(mktemp --suffix=.php -p "${DEV_TMP:-/tmp}")"
+  printf '%s\n' "$script" > "$file"
+  ( cd "$root" && php -d error_reporting="E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED" \
+      "$file" "$root/config.php" "$@" )
+  local rc=$?
+  rm -f "$file"
+  return "$rc"
+}
+
+recipe_test_user_create() {
+  local dir="$1" user="$2" password="$3" admin="$4" output
+  output="$(moodle_cli_php "$dir" '<?php
+define("CLI_SCRIPT", true);
+require($argv[1]);
+require_once($CFG->dirroot . "/user/lib.php");
+[$username, $password, $admin] = [$argv[2], $argv[3], $argv[4] === "1"];
+$user = $DB->get_record("user", ["username" => $username, "mnethostid" => $CFG->mnet_localhost_id, "deleted" => 0]);
+if (!$user) {
+    $id = user_create_user((object) [
+        "username" => $username, "password" => $password, "auth" => "manual",
+        "firstname" => "Dev", "lastname" => "Teste", "confirmed" => 1, "policyagreed" => 1,
+        "email" => $username . "@" . parse_url($CFG->wwwroot, PHP_URL_HOST),
+        "mnethostid" => $CFG->mnet_localhost_id,
+    ], true, false);
+    $user = $DB->get_record("user", ["id" => $id]);
+} else {
+    update_internal_user_password($user, $password);
+    $DB->set_field("user", "suspended", 0, ["id" => $user->id]);
+}
+$admins = array_diff(array_filter(explode(",", $CFG->siteadmins)), [$user->id]);
+if ($admin) {
+    $admins[] = $user->id;
+}
+set_config("siteadmins", implode(",", $admins));
+echo "ok\n";
+' "$user" "$password" "$admin" 2>&1)" || true
+  [[ "$output" == *ok* ]] || { printf '%s\n' "$output" >&2; return 1; }
+  if [[ "$admin" == 1 ]]; then
+    printf 'administrador do site\n'
+  else
+    printf 'usuário autenticado, sem papel em curso\n'
+  fi
+}
+
+recipe_test_user_remove() {
+  local dir="$1" user="$2" output
+  output="$(moodle_cli_php "$dir" '<?php
+define("CLI_SCRIPT", true);
+require($argv[1]);
+$user = $DB->get_record("user", ["username" => $argv[2], "mnethostid" => $CFG->mnet_localhost_id, "deleted" => 0]);
+if ($user) {
+    set_config("siteadmins", implode(",", array_diff(explode(",", $CFG->siteadmins), [$user->id])));
+    delete_user($user);
+}
+echo "ok\n";
+' "$user" 2>&1)" || true
+  [[ "$output" == *ok* ]]
 }

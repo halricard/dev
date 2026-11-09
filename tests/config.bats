@@ -21,7 +21,7 @@ load helper
     cat "$DEV_ETC/nginx/sites/meu-site.conf"
   '
   [[ "$status" -eq 0 ]]
-  [[ "$output" == *"server_name meu-site.localhost;"* ]]
+  [[ "$output" == *"server_name meu-site.localhost test.meu-site.localhost;"* ]]
   [[ "$output" == *"php-8.5.sock"* ]]
 }
 

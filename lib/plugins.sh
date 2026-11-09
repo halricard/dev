@@ -7,8 +7,9 @@ cmd_plugin() {
     list)            plugin_list "$@" ;;
     install)         plugin_install "$@" ;;
     remove|uninstall) plugin_remove "$@" ;;
+    update)          plugin_update "$@" ;;
     status)          plugin_status "$@" ;;
-    *)               die "uso: ${DEV_COMMAND:-$DEV plugin} list | install <nome> | remove <nome>" ;;
+    *)               die "uso: ${DEV_COMMAND:-$DEV plugin} list | install <nome> | update [nome] | remove <nome>" ;;
   esac
 }
 
@@ -103,6 +104,53 @@ plugin_install() {
   ok "plugin \"$name\" instalado com sucesso"
   blank
   hint "crie um novo projeto agora com: $DEV new $name <nome-do-site>"
+  blank
+}
+
+# A cópia instalada é uma foto do catálogo no dia do install. O update a troca
+# pela versão atual do catálogo, sem passar pelo remove: as ferramentas do
+# plugin e os projetos ficam onde estão.
+plugin_outdated() {
+  local name="$1"
+  [[ -d "$DEV_ROOT/plugins/$name" ]] && plugin_installed "$name" || return 1
+  ! diff -rq -x .installed "$DEV_ROOT/plugins/$name" "$DEV_PLUGINS/installed/$name" >/dev/null 2>&1
+}
+
+plugin_update() {
+  local names=() name updated=0
+  if [[ -n "${1:-}" ]]; then
+    plugin_installed "$1" || die "o plugin \"$1\" não está instalado"
+    names=("$1")
+  else
+    for name in $(available_plugins); do
+      plugin_installed "$name" && names+=("$name")
+    done
+  fi
+  step "ATUALIZANDO PLUGINS"
+  for name in "${names[@]}"; do
+    if ! plugin_outdated "$name"; then
+      ok "$name  já está em dia"
+      continue
+    fi
+    local target="$DEV_PLUGINS/installed/$name" stamp
+    stamp="$(cat "$target/.installed" 2>/dev/null || true)"
+    [[ -n "$stamp" ]] || stamp="$(date +%s)"
+    rm -rf "$target"
+    mkdir -p "$target"
+    cp -r "$DEV_ROOT/plugins/$name"/* "$target/"
+    printf '%s\n' "$stamp" > "$target/.installed"
+    if [[ -f "$target/plugin.sh" ]]; then
+      # shellcheck source=/dev/null
+      source "$target/plugin.sh"
+      declare -F plugin_install >/dev/null && { plugin_install >/dev/null || true; }
+    fi
+    ok "$name  atualizado"
+    updated=$(( updated + 1 ))
+  done
+  (( ${#names[@]} > 0 )) || info "nenhum plugin instalado"
+  if (( updated > 0 )); then
+    hint "projetos com skill de agente: $DEV agent update   regenera com as notas novas"
+  fi
   blank
 }
 

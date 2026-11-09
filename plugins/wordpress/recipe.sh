@@ -13,6 +13,13 @@ wp_core_dir() {
   return 1
 }
 
+# Versão do núcleo instalado, lida de wp-includes/version.php (sem rodar PHP).
+recipe_version() {
+  local dir="$1" core
+  core="$(wp_core_dir "$dir")" || return 1
+  sed -n "/^\$wp_version *= *'/{s/^\$wp_version *= *'\([^']*\)'.*/\1/p;q;}" "$dir/$core/wp-includes/version.php"
+}
+
 wp_config_file() {
   local dir="$1" candidate
   for candidate in wp-config.php "${PROJECT_DOCROOT:-.}/wp-config.php" public/wp-config.php \
@@ -176,4 +183,182 @@ recipe_schedule() {
 # Formato:  <intervalo em segundos>  <comando>
 60 php $target
 AGENDA
+}
+
+# ------------------------------------------------------------------- testes
+# phpunit: testes de integração de um plugin ou tema com a biblioteca de testes
+#          oficial do WordPress, num banco separado (<banco>_tests).
+# e2e:     testes de ponta a ponta com o @playwright/test do projeto, logados
+#          com um usuário temporário criado só para a execução.
+
+recipe_test_suites() {
+  printf '%s\n' \
+    "phpunit|testes de integração de um plugin ou tema (biblioteca de testes do WordPress, banco ${PROJECT_DATABASE:-do projeto}_tests)" \
+    "e2e|testes de ponta a ponta com o Playwright do projeto (@playwright/test)"
+}
+
+wp_installed_version() {
+  local core
+  core="$(wp_core_dir "$1")" || return 1
+  grep -oP "^\\\$wp_version\s*=\s*'\K[^']+" "$1/${core#./}/wp-includes/version.php" 2>/dev/null || true
+}
+
+wp_tests_dir() { printf '%s\n' "$DEV_HOME/wordpress-tests/$PROJECT_NAME"; }
+
+wp_tests_database() { printf '%s_tests\n' "$PROJECT_DATABASE"; }
+
+# Um diretório com phpunit.xml ou playwright.config, relativo a quem chamou.
+wp_test_target() {
+  local candidate="$1"
+  [[ -n "$candidate" ]] || return 1
+  [[ "$candidate" == /* ]] || candidate="${TEST_CALLER_DIR:-$PROJECT_DIR}/$candidate"
+  [[ -d "$candidate" ]] || return 1
+  candidate="$(cd "$candidate" && pwd)"
+  [[ -f "$candidate/phpunit.xml" || -f "$candidate/phpunit.xml.dist" \
+     || -f "$candidate/playwright.config.ts" || -f "$candidate/playwright.config.js" ]] || return 1
+  printf '%s\n' "$candidate"
+}
+
+recipe_test_ready() {
+  case "$1" in
+    phpunit)
+      [[ -f "$(wp_tests_dir)/includes/functions.php" && -f "$(wp_tests_dir)/wp-tests-config.php" ]] \
+        && grep -q "$(wp_installed_version "$PROJECT_DIR")" "$(wp_tests_dir)/.version" 2>/dev/null ;;
+    e2e)
+      [[ -x node_modules/.bin/playwright || -x "$PROJECT_DIR/node_modules/.bin/playwright" ]] ;;
+  esac
+}
+
+recipe_test_init() {
+  case "$1" in
+    phpunit) wp_init_phpunit ;;
+    e2e)
+      [[ -x node_modules/.bin/playwright ]] \
+        || die "o @playwright/test não está no projeto — instale com: $DEV exec npm install"
+      browser_install_deps ;;
+  esac
+}
+
+wp_init_phpunit() {
+  [[ -n "$PROJECT_DATABASE" ]] || die "o projeto não declara banco no dev.conf"
+  local version tarball dir core
+  version="$(wp_installed_version "$PROJECT_DIR")"
+  [[ -n "$version" ]] || die "não achei a versão do WordPress em wp-includes/version.php"
+  core="$(wp_core_dir "$PROJECT_DIR")"
+  dir="$(wp_tests_dir)"
+  tarball="$(download "$(url_for wpdevelop "$version")" "$(cache_name wpdevelop "$version")")"
+  rm -rf "$dir"
+  mkdir -p "$dir"
+  tar -xzf "$tarball" -C "$dir" --strip-components=3 --wildcards \
+    '*/tests/phpunit/includes/*' '*/tests/phpunit/data/*' \
+    || die "não consegui extrair a biblioteca de testes do WordPress $version"
+  cat > "$dir/wp-tests-config.php" <<PHP
+<?php
+// Gerado pelo dev test. Banco separado: a instalação de teste o apaga e recria.
+define( 'ABSPATH', '$PROJECT_DIR/${core#./}/' );
+define( 'WP_DEFAULT_THEME', 'default' );
+define( 'WP_DEBUG', true );
+define( 'DB_NAME', '$(wp_tests_database)' );
+define( 'DB_USER', '$(config_get MYSQL_USER)' );
+define( 'DB_PASSWORD', '$(config_get MYSQL_PASSWORD)' );
+define( 'DB_HOST', '127.0.0.1:$MYSQL_PORT' );
+define( 'DB_CHARSET', 'utf8mb4' );
+define( 'DB_COLLATE', '' );
+\$table_prefix = 'wptests_';
+define( 'WP_TESTS_DOMAIN', 'example.org' );
+define( 'WP_TESTS_EMAIL', 'admin@example.org' );
+define( 'WP_TESTS_TITLE', 'Test Blog' );
+define( 'WP_PHP_BINARY', 'php' );
+define( 'WPLANG', '' );
+PHP
+  chmod 600 "$dir/wp-tests-config.php"
+  printf '%s\n' "$version" > "$dir/.version"
+  create_database "$(wp_tests_database)"
+  ok "biblioteca de testes do WordPress $version  banco $(wp_tests_database)"
+}
+
+recipe_test_run() {
+  local suite="$1"; shift
+  # O alvo é o primeiro argumento, se for um diretório de testes; senão, o
+  # diretório de onde o comando foi chamado.
+  local target=""
+  if [[ $# -gt 0 ]] && target="$(wp_test_target "$1")"; then
+    shift
+  else
+    target="$(wp_test_target "${TEST_CALLER_DIR:-}" || true)"
+  fi
+  case "$suite" in
+    phpunit) wp_run_phpunit "$target" "$@" ;;
+    e2e)     wp_run_e2e "${target:-$PROJECT_DIR}" "$@" ;;
+  esac
+}
+
+wp_run_phpunit() {
+  local target="$1"; shift
+  if [[ -z "$target" ]]; then
+    bad "diga qual plugin ou tema testar (o diretório com phpunit.xml):"
+    hint "$DEV test phpunit wp-content/plugins/meu-plugin [argumentos do phpunit]"
+    return 1
+  fi
+  cd "$target" || return 1
+  local phpunit=vendor/bin/phpunit
+  [[ -x "$phpunit" ]] || phpunit="$PROJECT_DIR/vendor/bin/phpunit"
+  if [[ ! -x "$phpunit" ]]; then
+    bad "o PHPUnit não está instalado em ${target#"$PROJECT_DIR"/}"
+    hint "$DEV exec composer require --dev phpunit/phpunit yoast/phpunit-polyfills   (dentro do plugin)"
+    return 1
+  fi
+  local polyfills=""
+  [[ -d vendor/yoast/phpunit-polyfills ]] && polyfills="$PWD/vendor/yoast/phpunit-polyfills"
+  WP_TESTS_DIR="$(wp_tests_dir)" WP_CORE_DIR="$PROJECT_DIR/$(wp_core_dir "$PROJECT_DIR")" \
+    WP_TESTS_PHPUNIT_POLYFILLS_PATH="$polyfills" \
+    "$phpunit" "$@"
+}
+
+WP_E2E_USER="devtest-e2e"
+
+wp_e2e_cleanup() { recipe_test_user_remove "$PROJECT_DIR" "$WP_E2E_USER" >/dev/null 2>&1 || true; }
+
+wp_run_e2e() {
+  local target="$1"; shift
+  cd "$target" || return 1
+  [[ -x node_modules/.bin/playwright ]] \
+    || die "o @playwright/test não está em ${target#"$PROJECT_DIR"/} — instale com: $DEV exec npm install"
+  test_require_served
+  playwright_chromium || return 1
+  local password
+  password="$(random_password)"
+  if recipe_has_user "$PROJECT_DIR" "$WP_E2E_USER"; then
+    die "já existe um usuário \"$WP_E2E_USER\" — o dev usa esse nome só durante o e2e"
+  fi
+  recipe_test_user_create "$PROJECT_DIR" "$WP_E2E_USER" "$password" 1 >/dev/null \
+    || die "não consegui criar o usuário temporário do e2e"
+  test_on_exit wp_e2e_cleanup
+  info "usuário temporário $WP_E2E_USER criado para esta execução"
+  WP_BASE_URL="$(site_url "$PROJECT_NAME")" WP_USERNAME="$WP_E2E_USER" WP_PASSWORD="$password" \
+    PLAYWRIGHT_BROWSERS_PATH="$(playwright_browsers_path)" \
+    node_modules/.bin/playwright test "$@"
+}
+
+# ---------------------------------------------------------- usuário de teste
+recipe_test_user_create() {
+  local dir="$1" user="$2" password="$3" admin="$4" role=subscriber
+  [[ "$admin" == 1 ]] && role=administrator
+  if wp "$dir" user get "$user" >/dev/null 2>&1; then
+    wp "$dir" user update "$user" --user_pass="$password" --role="$role" >/dev/null || return 1
+  else
+    wp "$dir" user create "$user" "$user@${PROJECT_NAME}.localhost" \
+      --role="$role" --user_pass="$password" >/dev/null || return 1
+  fi
+  if [[ "$role" == administrator ]]; then
+    printf 'administrador\n'
+  else
+    printf 'assinante (subscriber)\n'
+  fi
+}
+
+recipe_test_user_remove() {
+  local dir="$1" user="$2"
+  wp "$dir" user get "$user" >/dev/null 2>&1 || return 0
+  wp "$dir" user delete "$user" --yes >/dev/null
 }

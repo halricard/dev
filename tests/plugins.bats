@@ -103,3 +103,18 @@ EOF
 
   rm -rf "$DEV_ROOT/plugins/app-fantasma"
 }
+
+@test "plugin update troca a cópia instalada pela do catálogo e mantém a data" {
+  libraries '
+    dir="$DEV_PLUGINS/installed/wordpress"
+    mkdir -p "$dir"; cp -r "$DEV_ROOT/plugins/wordpress"/* "$dir/"
+    echo 123 > "$dir/.installed"
+    echo "# antigo" > "$dir/recipe.sh"
+    plugin_outdated wordpress
+    plugin_install() { :; }
+    plugin_update wordpress
+    ! plugin_outdated wordpress
+    [ "$(cat "$dir/.installed")" = "123" ]
+    grep -q recipe_test_suites "$dir/recipe.sh"
+  '
+}

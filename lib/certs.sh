@@ -225,7 +225,7 @@ served_hosts() {
   local names=() file
   for file in "$DEV_SITES"/*; do
     [[ -f "$file" ]] || continue
-    names+=("$(basename "$file").localhost")
+    names+=("$(basename "$file").localhost" "$(test_host "$(basename "$file")")")
   done
   names+=("adminer.localhost" "mail.localhost" "localhost")
   printf '%s\n' "${names[@]}"

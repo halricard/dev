@@ -169,3 +169,15 @@ load helper
   [[ "$output" == *"php-fpm 8.5.12"* ]]
 }
 
+
+@test "os testes não enxergam as portas reais da máquina" {
+  run libraries '
+    source "$DEV_ROOT/lib/services.sh"
+    for port in "$HTTP_PORT" "$HTTPS_PORT" "$MYSQL_PORT" "$SMTP_PORT" "$MAILPIT_UI_PORT"; do
+      port_busy "$port" && echo "ocupada $port"
+    done
+    echo fim
+  '
+  [ "$status" -eq 0 ]
+  [ "$output" = "fim" ]
+}

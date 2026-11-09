@@ -3,6 +3,8 @@
 
 # shellcheck source=lib/project.sh
 source "$DEV_ROOT/lib/project.sh"
+# shellcheck source=lib/test.sh
+source "$DEV_ROOT/lib/test.sh"
 
 up_marker() { printf '%s\n' "$DEV_UP/$1"; }
 
@@ -50,6 +52,7 @@ cmd_down() {
   fi
 
   step "DOWN  $name"
+  test_user_cleanup_site "$name" || true
   take_down "$name"
   ok "$name fora do ar — site, agenda e workers parados"
   hint "arquivos e banco continuam; $DEV up põe de volta"

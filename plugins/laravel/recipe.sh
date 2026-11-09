@@ -5,6 +5,13 @@ recipe_title() { printf 'Laravel\n'; }
 
 recipe_docroot() { printf 'public\n'; }
 
+# Versão do framework instalado, lida do vendor (sem rodar PHP).
+recipe_version() {
+  local file="$1/vendor/laravel/framework/src/Illuminate/Foundation/Application.php"
+  [[ -f "$file" ]] || return 1
+  sed -n "/const VERSION = '/{s/.*const VERSION = '\([^']*\)'.*/\1/p;q;}" "$file"
+}
+
 setup_database_env() {
   local database="$1"
   [[ -n "$database" ]] || return 0
@@ -166,4 +173,96 @@ recipe_schedule() {
 # Formato:  <intervalo em segundos>  <comando>
 60 php artisan schedule:run
 AGENDA
+}
+
+# ------------------------------------------------------------------- testes
+# pest (ou phpunit): a suíte do projeto pelo "php artisan test".
+# browser: testes de navegador do Pest 4 (pestphp/pest-plugin-browser), que
+#          serve a aplicação em processo e abre o navegador do Playwright do
+#          projeto (Chrome for Testing desde o Playwright 1.57).
+
+laravel_uses_pest() {
+  [[ -x vendor/bin/pest ]] || grep -q '"pestphp/pest"' composer.json 2>/dev/null
+}
+
+recipe_test_suites() {
+  if laravel_uses_pest; then
+    printf '%s\n' "pest|testes do projeto com Pest (php artisan test)"
+  else
+    printf '%s\n' "phpunit|testes do projeto com PHPUnit (php artisan test)"
+  fi
+  printf '%s\n' "browser|testes de navegador do Pest 4 (pest-plugin-browser, com o Playwright do projeto)"
+}
+
+recipe_test_ready() {
+  case "$1" in
+    pest|phpunit) [[ -x vendor/bin/phpunit || -x vendor/bin/pest ]] ;;
+    browser)      [[ -d vendor/pestphp/pest-plugin-browser && -x node_modules/.bin/playwright ]] ;;
+  esac
+}
+
+recipe_test_init() {
+  case "$1" in
+    pest|phpunit)
+      with_progress "instalando as dependências de desenvolvimento (composer install)" \
+        env COMPOSER_NO_INTERACTION=1 composer install --no-interaction ;;
+    browser)
+      laravel_uses_pest || die "os testes de navegador do Pest pedem o Pest no projeto — veja pestphp.com"
+      if [[ ! -d vendor/pestphp/pest-plugin-browser ]]; then
+        info "o plugin de navegador do Pest não está no projeto — entra como dependência de desenvolvimento"
+        confirm "rodar composer require --dev pestphp/pest-plugin-browser?" s \
+          || die "sem o plugin não há o que rodar"
+        with_progress "instalando o pest-plugin-browser" \
+          env COMPOSER_NO_INTERACTION=1 composer require --dev pestphp/pest-plugin-browser --no-interaction \
+          || return 1
+      fi
+      if [[ ! -x node_modules/.bin/playwright ]]; then
+        info "o pacote npm playwright não está no projeto"
+        confirm "rodar npm install --save-dev playwright?" s \
+          || die "sem o Playwright o Pest não abre o navegador"
+        with_progress "instalando o Playwright (npm)" \
+          npm install --save-dev --no-audit --no-fund playwright || return 1
+      fi
+      browser_install_deps || return 1 ;;
+  esac
+}
+
+recipe_test_run() {
+  local suite="$1"; shift
+  case "$suite" in
+    pest|phpunit)
+      php artisan test "$@" ;;
+    browser)
+      playwright_chromium || return 1
+      if [[ $# -eq 0 && -d tests/Browser ]]; then
+        set -- tests/Browser
+      fi
+      PLAYWRIGHT_BROWSERS_PATH="$(playwright_browsers_path)" php artisan test "$@" ;;
+  esac
+}
+
+# ---------------------------------------------------------- usuário de teste
+# O Laravel não tem papel de administrador padrão: a conta é um usuário comum,
+# com e-mail verificado.
+recipe_test_user_create() {
+  local dir="$1" user="$2" password="$3" output
+  output="$( cd "$dir" && php artisan tinker --execute="
+    \$u = \\App\\Models\\User::updateOrCreate(
+      ['email' => '$(recipe_identity "$user")'],
+      ['name' => 'Dev Teste', 'password' => bcrypt('$password')]
+    );
+    \$u->forceFill(['email_verified_at' => now()])->save();
+    echo 'ok';
+  " 2>&1 )" || true
+  [[ "$output" == *ok* ]] || { printf '%s\n' "$output" >&2; return 1; }
+  printf 'usuário comum (o Laravel não tem papel de administrador padrão)\n'
+}
+
+recipe_test_user_remove() {
+  local dir="$1" user="$2" output
+  output="$( cd "$dir" && php artisan tinker --execute="
+    \\App\\Models\\User::where('email', '$(recipe_identity "$user")')->delete();
+    echo 'ok';
+  " 2>&1 )" || true
+  [[ "$output" == *ok* ]]
 }

@@ -9,6 +9,7 @@ This project runs on `dev`, a Docker-free PHP/Node environment. The project's ow
 
 - Project: `{{PROJECT}}`
 - Application: {{APP_TITLE}}
+- Version: {{APP_VERSION}}
 - PHP: `{{PHP}}`
 - Database: `{{DATABASE}}`
 - Docroot: `{{DOCROOT}}`
@@ -47,7 +48,27 @@ Settings live in `dev.conf` at the project root. Run all commands from inside th
 - Run `dev snapshot <name>` before any destructive step: migrations, database import, search-replace, bulk deletes, core or plugin upgrades. Undo with `dev restore <name>`. `dev snapshots` lists the saved points.
 - Do not edit `dev.schedule` or `dev.workers` unless the task asks for it, then run `dev up` to apply the change.
 - Do not edit `dev.conf` unless the task asks for it, then run `dev up`.
-- `dev passwd` resets the admin password. `dev schedule` and `dev worker` show recurring jobs and background processes.
+- `dev passwd` resets the real admin password. Run it only when the user asks. `dev schedule` and `dev worker` show recurring jobs and background processes.
 - `dev destroy <name>` deletes the project, its database and snapshots. Never run it without an explicit request.
+
+## Tests
+
+- `dev test` lists the test suites this application offers. `dev test <suite> [args...]` runs one, passing the arguments to the tool. The first run prepares the suite; `dev test init <suite>` prepares it again after an upgrade.
+- Run the relevant suite after changing code. Write new tests in the application's own format (see the notes below).
+- Test suites use their own tables and data directories. They never touch the site's data.
+
+## Browser and test account
+
+- `dev test user` creates a temporary test account and prints its login and password. Each call sets a new password. `dev test user --no-admin` creates it without admin rights. `dev test user --remove` deletes it, and `dev down` deletes it too.
+- Log in with that account when you test in the browser. Never use, read or reset the real administrator account.
+- If the `dev-browser` MCP server is available, use it to open and inspect the site at {{URL}}. It only reaches this project, its test address ({{TEST_URL}}) and Mailpit (https://mail.localhost), where you can read e-mail the site sent.
+- Use the browser to check behaviour now. For checks that must keep passing, write a test in the suite.
+
+## Up-to-date documentation
+
+- If the `dev-docs` MCP server (Context7) is available, look up the documentation before you write or change code that uses {{APP_TITLE}} APIs, hooks, configuration or CLI commands, and before you add or upgrade a package. Do not rely on memory for APIs that change between versions.
+- Use the library IDs in the notes below and pass them straight to `query-docs`. Call `resolve-library-id` only for other packages, such as a Composer or npm dependency of this project.
+- Ask one specific question per `query-docs` call. Match the documentation to the version above: when an ID accepts a version (`/org/project/version`), use the one this project runs.
+- Follow what the documentation says over what you remember. If it contradicts the code in this project, trust the code and mention the difference.
 
 {{APP_NOTES}}

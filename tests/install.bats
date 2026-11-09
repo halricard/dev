@@ -254,6 +254,9 @@ EOF
     touch "$prefix/sbin/nginx"
     has_net_bind_capability() { return 1; }
     sudo() { return 0; }
+    # Só a capability do nginx está em teste: nenhuma porta conta como ocupada,
+    # para o -f nunca encerrar processo nenhum.
+    port_busy() { return 1; }
     cmd_fix -f
   '
   [[ "$output" == *"permissão 80/443 restaurada no nginx"* ]]

@@ -43,4 +43,8 @@ O comando principal se chama `dev`.
 - `lib/plugins.sh`: gerenciador do catálogo e ciclo de vida de plugins em `plugins/`.
 - `plugins/<app>/`: plugins de aplicação contendo `plugin.sh` (ferramentas e ciclo de vida), `recipe.sh` (scaffolding e hooks de projeto) e `agent.md` (notas em inglês da aplicação para a skill de agentes).
 - `lib/agent.sh` e `lib/agent/skill.md`: `dev agent` gera `SKILL.md` no projeto (`.claude/skills/dev`, `.agents/skills/dev` para Codex, `.agent/skills/dev` para Antigravity). O conteúdo da skill é em inglês, lido pelo agente.
+- `lib/test.sh`: `dev test` lista, prepara e roda as suítes que cada receita declara (`recipe_test_suites`, `recipe_test_ready`, `recipe_test_init`, `recipe_test_run`) e cria o usuário de teste temporário (`recipe_test_user_create`, `recipe_test_user_remove`), apagado no `dev down`.
+- `lib/browser.sh`: `dev browser` instala o Chrome for Testing com chromedriver (sha256 fixado em `versions.sh`) e o Playwright MCP; `dev browser mcp <projeto>` é o servidor MCP que o `dev agent add --browser` configura, restrito a `https://<projeto>.localhost`, `https://test.<projeto>.localhost` e ao Mailpit.
+- `lib/docs.sh`: `dev docs` instala o Context7 MCP (versão fixada em `versions.sh`) e guarda a chave `CONTEXT7_API_KEY` em `~/.dev/config`; `dev docs mcp` é o servidor que o `dev agent add --docs` configura, com a chave só por variável de ambiente. A receita informa a versão instalada da aplicação (`recipe_version`) e o `agent.md` lista os IDs do Context7.
+- Todo projeto responde também em `https://test.<projeto>.localhost`, o endereço das suítes que exigem um site separado (Behat).
 - Estado em `~/.dev`, cache de download em `~/.cache/dev`.

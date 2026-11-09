@@ -60,8 +60,9 @@ write_vhost() {
 
   local name="$1" docroot="$2" php_series="${3:-8.5}"
   mkdir -p "$DEV_ETC/nginx/sites"
-  local socket
+  local socket aliases=""
   socket="$(fpm_socket "$(php_version "$php_series")")"
+  [[ "$name" == adminer ]] || aliases=" $(test_host "$name")"
   cat > "$DEV_ETC/nginx/sites/$name.conf" <<CONF
 # Gerado pelo dev para "$name". Não edite.
 
@@ -69,7 +70,7 @@ server {
     listen      127.0.0.1:$HTTP_PORT;
     listen      127.0.0.1:$HTTPS_PORT ssl;
     http2       on;
-    server_name $name.localhost;
+    server_name $name.localhost$aliases;
     root        $docroot;
 
     ssl_certificate     $LEAF_CRT;

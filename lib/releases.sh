@@ -19,6 +19,7 @@ pinned_version() {
     wpcli)     printf '%s\n' "$WPCLI_VERSION" ;;
     wordpress) printf '%s\n' "$WORDPRESS_VERSION" ;;
     moodle)    printf '%s\n' "$MOODLE_VERSION" ;;
+    chrome|chromedriver) printf '%s\n' "$CHROME_VERSION" ;;
   esac
 }
 
@@ -36,6 +37,9 @@ cache_name() {
     wpcli)     printf 'wp-cli-%s.phar\n' "$version" ;;
     wordpress) printf 'wordpress-%s.tar.gz\n' "${version:-latest}" ;;
     moodle)    printf 'moodle-%s.tgz\n' "${version:-latest}" ;;
+    chrome)    printf 'chrome-%s-linux64.zip\n' "$version" ;;
+    chromedriver) printf 'chromedriver-%s-linux64.zip\n' "$version" ;;
+    wpdevelop) printf 'wordpress-develop-%s.tar.gz\n' "$version" ;;
   esac
 }
 
@@ -64,6 +68,10 @@ url_for() {
         minor="${minor%%.*}"
         printf 'https://download.moodle.org/download.php/direct/stable%s%s/moodle-%s.tgz\n' "$major" "$minor" "$version"
       fi ;;
+    chrome|chromedriver)
+      printf 'https://storage.googleapis.com/chrome-for-testing-public/%s/linux64/%s-linux64.zip\n' "$version" "$component" ;;
+    wpdevelop)
+      printf 'https://github.com/WordPress/wordpress-develop/archive/refs/tags/%s.tar.gz\n' "$version" ;;
   esac
 }
 

@@ -73,6 +73,10 @@ fi
 
 DEV_ADMIN_USER="dev"
 
+# Cada projeto responde também neste segundo endereço, reservado às suítes de
+# teste que exigem um site separado (o Behat do Moodle, por exemplo).
+test_host() { printf 'test.%s.localhost\n' "$1"; }
+
 sandbox_libs() {
   local dir
   for dir in "$DEV_RUNTIME"/mysql/*/lib-compat; do
@@ -338,6 +342,14 @@ config_set() {
   mv "$tmp" "$DEV_CONFIG"
 }
 
+config_unset() {
+  local key="$1" tmp
+  [[ -f "$DEV_CONFIG" ]] || return 0
+  tmp="$(mktemp)"
+  grep -v "^${key}=" "$DEV_CONFIG" > "$tmp" || true
+  mv "$tmp" "$DEV_CONFIG"
+}
+
 # ------------------------------------------------------- atalhos de comando
 write_cli_shortcuts() {
   mkdir -p "$DEV_BIN"
@@ -463,6 +475,8 @@ RECIPE_HOOKS=(
   recipe_install recipe_restore recipe_next_steps
   recipe_change_password recipe_has_user recipe_identity
   recipe_gitignore recipe_schedule recipe_workers
+  recipe_test_suites recipe_test_ready recipe_test_init recipe_test_run
+  recipe_test_user_create recipe_test_user_remove recipe_version
 )
 
 unload_recipe() {

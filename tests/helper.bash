@@ -32,8 +32,22 @@ STUB
   chmod +x "$STUBS_BIN/$1"
 }
 
+# Os testes nunca enxergam as portas reais da máquina: as portas do dev (80,
+# 443, 13306, 11025) são as mesmas dentro e fora do sandbox, e um "dev fix -f"
+# ou "dev start" de teste encerraria o MySQL e o Mailpit de verdade. Este ss
+# falso responde que nada escuta; quem testa portas define a própria função ss.
+guard_ports() {
+  local dir="$BATS_TEST_TMPDIR/guard"
+  if [[ ! -x "$dir/ss" ]]; then
+    mkdir -p "$dir"
+    printf '#!/bin/sh\necho "State Recv-Q Send-Q Local Address:Port Peer Address:Port Process"\n' > "$dir/ss"
+    chmod +x "$dir/ss"
+  fi
+  printf '%s\n' "$dir"
+}
+
 dev_cmd() {
-  "$ROOT/dev" "$@" </dev/null
+  PATH="$(guard_ports):$PATH" "$ROOT/dev" "$@" </dev/null
 }
 
 libraries() {
@@ -53,6 +67,10 @@ libraries() {
     eval "$2"
   ' _ "$ROOT" "$1" </dev/null
 }
+
+# Toda chamada de libraries passa pelo guarda de portas.
+eval "unguarded_$(declare -f libraries)"
+libraries() { PATH="$(guard_ports):$PATH" unguarded_libraries "$@"; }
 
 in_project() { cd "$TEST_PROJECT" && libraries "$1"; }
 

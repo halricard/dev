@@ -66,6 +66,43 @@ O site estará disponível imediatamente em `https://meu-blog.localhost`.
    - `dev snapshot checkpoint1` (salva estado completo do banco e arquivos)
    - `dev restore checkpoint1` (restaura se algo der errado)
 
+### Testes e navegador do agente
+
+Cada aplicação traz as suítes de teste oficiais dela, e `dev test` as roda com o PHP, o Node e o banco do projeto:
+
+| Aplicação | Suítes | Navegador |
+|---|---|---|
+| Moodle | `phpunit`, `behat` | Chrome for Testing fixado pelo dev, com chromedriver (o Behat exige WebDriver) |
+| Laravel | `pest` (ou `phpunit`), `browser` (Pest 4) | o do Playwright do projeto |
+| WordPress | `phpunit` (plugin ou tema), `e2e` (Playwright) | o do Playwright do projeto |
+
+Desde o Playwright 1.57, o navegador que ele baixa também é um Chrome for Testing; só muda quem fixa a versão. A primeira execução prepara a suíte: tabelas de teste com prefixo próprio, dataroot separado e dependências de desenvolvimento.
+
+```bash
+dev test                               # lista as suítes deste projeto
+dev test behat --tags=@local_meuplugin # Moodle: Behat no Chrome, em https://test.<projeto>.localhost
+dev test pest --filter=UserTest        # Laravel
+dev test phpunit wp-content/plugins/meu-plugin   # WordPress
+dev test user                          # conta temporária para testar no navegador
+```
+
+`dev test user` cria a conta `devtest` com senha nova a cada chamada; o `dev down` a apaga. A conta de administrador real nunca é usada nos testes.
+
+Para dar ao agente de IA um navegador restrito ao projeto (Playwright MCP, headless, sem perfil em disco), use `dev agent add claude --browser`. A configuração gravada no `.mcp.json` só chama `dev browser mcp <projeto>`, sem segredo nem caminho da máquina.
+
+### Documentação atualizada para o agente
+
+Com `--docs`, o agente consulta a documentação atual da aplicação pelo [Context7](https://context7.com) em vez de confiar na memória:
+
+```bash
+dev docs key                            # grava a chave de API em ~/.dev/config (pede sem eco)
+dev agent add claude --docs             # instala o Context7 MCP e registra o servidor dev-docs
+```
+
+A skill informa a versão instalada da aplicação (lida de `vendor/`, `wp-includes/version.php` ou `version.php`) e os IDs do Context7 de cada uma: `/laravel/docs/<major>.x` e `/pestphp/docs` no Laravel, as referências e os handbooks de developer.wordpress.org no WordPress, `/websites/moodledev_io` no Moodle. Rode `dev agent update` depois de atualizar a aplicação.
+
+A configuração no projeto só chama `dev docs mcp`; a chave fica fora do projeto e do git e chega ao servidor por variável de ambiente. Com a chave gravada, `dev new --agent <alvo>` já inclui a documentação.
+
 ---
 
 ## Comandos
@@ -80,7 +117,7 @@ dev fix                 recupera a máquina meio de pé (-f encerra intrusos)
 dev doctor              diagnostica o que costuma quebrar e instala as ferramentas de compilação
 dev versions            o que está fixado vs. o que foi publicado
 dev uninstall           remove o sandbox
-dev plugin              gerenciador de plugins (list, install, remove)
+dev plugin              gerenciador de plugins (list, install, update, remove)
 dev new                 cria um projeto novo já instalado e no ar
 dev up                  põe este projeto no ar: banco, vhost, agenda e workers
 dev down                tira do ar; arquivos e banco ficam
@@ -103,7 +140,10 @@ dev db                  consulta (query), exporta ou importa banco
 dev passwd              redefine a senha do admin
 dev open                abre o site, mailpit ou adminer no navegador
 dev autostart           sobe a pilha no início do sistema
-dev agent               gera a skill do dev para Claude, Codex ou Antigravity (add, remove, update, list)
+dev test                suítes de teste da aplicação e usuário de teste temporário (test user)
+dev browser             navegador do dev para testes e para o agente de IA (status, install, remove)
+dev agent               gera a skill do dev para Claude, Codex ou Antigravity (add, remove, update, list; --browser, --docs)
+dev docs                documentação atualizada para o agente via Context7 (status, key, install, remove)
 ```
 
 ---

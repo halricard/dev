@@ -128,8 +128,12 @@ th { background: var(--code); color: var(--fg); font-weight: 600; }
   ○  moodle         Moodle                   disponível</span>
 <span class="pr">$</span> <span class="in">dev plugin install moodle</span>
 <span class="out">  ✔  plugin "moodle" instalado com sucesso</span>
+<span class="pr">$</span> <span class="in">dev plugin update</span>
+<span class="out">  ✔  moodle  atualizado
+  ✔  wordpress  já está em dia</span>
 <span class="pr">$</span> <span class="in">dev plugin remove laravel</span>
 <span class="out">  ✔  plugin "laravel" removido com sucesso</span></div>
+  <p>O <code>dev plugin update</code> traz a versão atual da receita e das notas do agente para um plugin já instalado, sem tocar nos projetos. Depois dele, <code>dev agent update</code> regenera as skills com as notas novas.</p>
 </section>
 
 <section id="fluxo-moodle">
@@ -147,6 +151,7 @@ th { background: var(--code); color: var(--fg); font-weight: 600; }
 <span class="out">  ✔  meu-ead servindo https://meu-ead.localhost</span>
 <span class="pr">$</span> <span class="in">dev exec php app/admin/cli/cron.php</span>
 <span class="pr">$</span> <span class="in">dev logs -e</span>
+<span class="pr">$</span> <span class="in">dev test behat --tags=@local_meuplugin</span>
 <span class="pr">$</span> <span class="in">dev down</span></div>
 </section>
 
@@ -185,8 +190,88 @@ th { background: var(--code); color: var(--fg); font-weight: 600; }
 <span class="pr">$</span> <span class="in">dev restore antes-do-update</span></div>
 </section>
 
+<section id="testes">
+  <h2>7. Testes da Aplicação</h2>
+  <p>Cada aplicação traz as suítes de teste oficiais dela. O <code>dev test</code> as roda com o PHP, o Node, o Composer e o banco do projeto. A primeira execução prepara a suíte; os testes usam tabelas e diretórios próprios e não tocam nos dados do site.</p>
+  <table>
+    <tr><th>Aplicação</th><th>Suíte</th><th>O que roda</th></tr>
+    <tr><td>Moodle</td><td><code>phpunit</code></td><td>PHPUnit do Moodle, tabelas <code>phpu_</code> e dados em <code>data-phpunit/</code>. Caminhos relativos a <code>app/</code></td></tr>
+    <tr><td>Moodle</td><td><code>behat</code></td><td>Behat no Chrome do dev, tabelas <code>bht_</code>, dados em <code>data-behat/</code> e site em <code>https://test.&lt;projeto&gt;.localhost</code></td></tr>
+    <tr><td>Laravel</td><td><code>pest</code> ou <code>phpunit</code></td><td><code>php artisan test</code>; o nome segue o que o projeto usa</td></tr>
+    <tr><td>Laravel</td><td><code>browser</code></td><td>Testes de navegador do Pest 4 (<code>pestphp/pest-plugin-browser</code>); o Pest serve a aplicação sozinho</td></tr>
+    <tr><td>WordPress</td><td><code>phpunit</code></td><td>Testes de integração de um plugin ou tema com a biblioteca oficial do WordPress, no banco <code>&lt;banco&gt;_tests</code></td></tr>
+    <tr><td>WordPress</td><td><code>e2e</code></td><td>Playwright do projeto (<code>@playwright/test</code>), logado com um usuário temporário criado só para a execução</td></tr>
+  </table>
+  <p class="scope project">no diretório do projeto</p>
+  <div class="term"><span class="pr">$</span> <span class="in">dev test</span>
+<span class="out">  TESTES  meu-ead
+  phpunit    testes unitários e de integração (PHPUnit; tabelas phpu_, dados em data-phpunit/)
+  behat      testes de aceitação no navegador (Behat + Chrome em https://test.meu-ead.localhost)</span>
+<span class="pr">$</span> <span class="in">dev test phpunit --filter=meu_teste</span>
+<span class="pr">$</span> <span class="in">dev test behat --tags=@local_meuplugin</span>
+<span class="pr">$</span> <span class="in">dev test init behat</span>
+<span class="out">  ✔  behat pronta</span></div>
+  <p>Depois de atualizar a aplicação, instalar um plugin ou criar passos novos do Behat, rode <code>dev test init &lt;suíte&gt;</code>.</p>
+
+  <h3>Qual navegador cada suíte usa</h3>
+  <p>O Behat do Moodle fala WebDriver, que exige um chromedriver da mesma versão do Chrome. Por isso o dev fixa os dois juntos: <b>Chrome for Testing</b> com sha256 conferido no download (<code>dev browser install</code>, ou automaticamente na primeira execução). O e2e do WordPress e o navegador do Pest usam o Playwright do próprio projeto, que baixa o build que aquela versão dele fixa. Desde o Playwright 1.57 esse build também é um Chrome for Testing; só muda quem fixa a versão. Os dois ficam em <code>~/.dev/runtime</code>, compartilhados entre projetos.</p>
+  <p>As bibliotecas do sistema que o Chrome pede são oferecidas para instalação via <code>sudo apt</code>. Se o sistema bloquear o sandbox do Chrome, <code>BROWSER_NO_SANDBOX=1</code> em <code>~/.dev/config</code> o desliga.</p>
+
+  <h3>Usuário de teste temporário</h3>
+  <p>Para testar no navegador sem usar a conta de administrador real, o <code>dev test user</code> cria a conta <code>devtest</code> e mostra a senha. Cada chamada troca a senha. A conta some no <code>dev down</code> ou com <code>dev test user --remove</code>. Um usuário <code>devtest</code> que o dev não criou nunca é alterado.</p>
+  <p class="scope project">no diretório do projeto</p>
+  <div class="term"><span class="pr">$</span> <span class="in">dev test user</span>
+<span class="out">  USUÁRIO DE TESTE  meu-ead
+  login         devtest
+  senha         DevKxwPqrTmab7#
+  papel         administrador do site
+  site          https://meu-ead.localhost
+  →  conta temporária: some no dev down, ou já com: dev test user --remove</span>
+<span class="pr">$</span> <span class="in">dev test user --no-admin</span>
+<span class="pr">$</span> <span class="in">dev test user --remove</span></div>
+</section>
+
+<section id="agentes">
+  <h2>8. Agentes de IA e Navegador do Agente</h2>
+  <p>O <code>dev agent add</code> gera a skill do dev no projeto para Claude Code, Codex ou Antigravity. Ela ensina o agente a rodar tudo pelo <code>dev</code>, a usar o <code>dev test</code> e a testar no navegador com o usuário temporário, nunca com o administrador real.</p>
+  <p>Com <code>--browser</code>, o agente ganha também um navegador: o Playwright MCP, em versão fixada, com o Chrome do dev, sem janela e sem perfil em disco. Ele só alcança <code>https://&lt;projeto&gt;.localhost</code>, <code>https://test.&lt;projeto&gt;.localhost</code> e o Mailpit. O Playwright avisa que essa lista não é uma barreira de segurança, então trate-a como proteção contra engano, não contra código malicioso.</p>
+  <p class="scope project">no diretório do projeto</p>
+  <div class="term"><span class="pr">$</span> <span class="in">dev agent add claude --browser</span>
+<span class="out">  ✔  claude  .claude/skills/dev/SKILL.md
+  ✔  Chrome for Testing 157.0.8103.38  com chromedriver
+  ✔  Playwright MCP 0.0.83
+  ✔  claude  .mcp.json  servidor dev-browser</span></div>
+  <table>
+    <tr><th>Agente</th><th>Onde o navegador é configurado</th></tr>
+    <tr><td>Claude Code</td><td><code>.mcp.json</code> na raiz do projeto; outros servidores do arquivo são preservados. O Claude Code pede aprovação antes de ativar.</td></tr>
+    <tr><td>Codex</td><td><code>.codex/config.toml</code> do projeto, num bloco marcado; o Codex só o lê em projetos confiáveis</td></tr>
+    <tr><td>Antigravity</td><td>Só aceita MCP na configuração global; o dev mostra o trecho para colar</td></tr>
+  </table>
+  <p>A configuração gravada só chama <code>dev browser mcp &lt;projeto&gt;</code>: não leva senha nem caminho da máquina e pode ir para o git. O <code>dev agent remove</code> tira a skill e a entrada do navegador; o <code>dev browser remove</code> apaga o Chrome e o Playwright MCP da máquina.</p>
+
+  <h3>Documentação atualizada (Context7)</h3>
+  <p>Com <code>--docs</code>, o agente ganha o servidor <code>dev-docs</code>: o Context7 MCP, em versão fixada, que entrega a documentação atual de Laravel, WordPress, Moodle e das bibliotecas do projeto. A skill passa a dizer a versão instalada da aplicação e os IDs do Context7 que valem para ela, para que o agente consulte a documentação daquela versão antes de escrever código.</p>
+  <p class="scope machine">na máquina</p>
+  <div class="term"><span class="pr">$</span> <span class="in">dev docs key</span>
+<span class="out">  ?  chave de API do Context7 (não aparece ao digitar):
+  ✔  chave aceita pelo Context7
+  ✔  chave gravada em ~/.dev/config  ctx7sk-…a1b2</span></div>
+  <p class="scope project">no diretório do projeto</p>
+  <div class="term"><span class="pr">$</span> <span class="in">dev agent add claude --docs</span>
+<span class="out">  ✔  claude  .claude/skills/dev/SKILL.md
+  ✔  Context7 MCP 4.4.4
+  ✔  claude  .mcp.json  servidor dev-docs</span></div>
+  <table>
+    <tr><th>Aplicação</th><th>IDs do Context7 na skill</th></tr>
+    <tr><td>Laravel</td><td><code>/laravel/docs/&lt;major&gt;.x</code>, <code>/laravel/framework</code>, <code>/pestphp/docs</code></td></tr>
+    <tr><td>WordPress</td><td>Referência de funções, hooks e classes, Plugin e Theme Handbooks, <code>/wordpress/gutenberg</code>, <code>/wp-cli/handbook</code></td></tr>
+    <tr><td>Moodle</td><td><code>/websites/moodledev_io</code>, <code>/moodle/devdocs</code>, <code>/moodle/moodle</code></td></tr>
+  </table>
+  <p>A chave fica em <code>~/.dev/config</code> (permissão 600), ou na variável <code>CONTEXT7_API_KEY</code>, que tem precedência. A configuração do projeto só chama <code>dev docs mcp</code>, que entrega a chave ao servidor por variável de ambiente: ela não vai para o projeto, para o git nem para a linha de comando. Sem chave, o Context7 funciona com limites de uso menores. Com a chave gravada, <code>dev new --agent &lt;alvo&gt;</code> já inclui a documentação. Depois de atualizar a aplicação, rode <code>dev agent update</code> para a skill trazer a versão nova.</p>
+</section>
+
 <section id="tabela-comandos">
-  <h2>7. Tabela Completa de Comandos do Projeto</h2>
+  <h2>9. Tabela Completa de Comandos do Projeto</h2>
   <table>
     <tr><th>Comando</th><th>Onde Rodar</th><th>Descrição</th></tr>
     <tr><td><code>dev up</code></td><td>Projeto</td><td>Coloca o projeto no ar com banco, vhost, agenda e workers</td></tr>
@@ -212,7 +297,13 @@ th { background: var(--code); color: var(--fg); font-weight: 600; }
     <tr><td><code>dev passwd</code></td><td>Projeto</td><td>Redefine com segurança a senha do administrador da aplicação</td></tr>
     <tr><td><code>dev open [mail|db]</code></td><td>Projeto</td><td>Abre o site no navegador, ou as ferramentas Mailpit / Adminer</td></tr>
     <tr><td><code>dev agent add [alvo]</code></td><td>Projeto</td><td>Gera a skill do dev para um agente de IA (<code>claude</code>, <code>codex</code>, <code>antigravity</code> ou <code>all</code>); sem alvo, pergunta. Também em <code>dev new --agent &lt;alvo&gt;</code></td></tr>
-    <tr><td><code>dev agent remove|update|list</code></td><td>Projeto</td><td>Remove a skill gerada, a regenera após mudar o <code>dev.conf</code> ou mostra onde está instalada</td></tr>
+    <tr><td><code>dev agent remove|update|list</code></td><td>Projeto</td><td>Remove a skill gerada (e o navegador e a documentação do agente), a regenera após mudar o <code>dev.conf</code> ou atualizar a aplicação, ou mostra onde está instalada</td></tr>
+    <tr><td><code>dev test [suíte] [args]</code></td><td>Projeto</td><td>Lista as suítes de teste da aplicação ou roda uma, preparando-a na primeira vez</td></tr>
+    <tr><td><code>dev test init &lt;suíte&gt;</code></td><td>Projeto</td><td>Prepara a suíte de novo, depois de atualizar a aplicação</td></tr>
+    <tr><td><code>dev test user</code></td><td>Projeto</td><td>Cria o usuário de teste temporário (<code>--no-admin</code>, <code>--remove</code>)</td></tr>
+    <tr><td><code>dev browser [install|remove]</code></td><td>Máquina</td><td>Estado, instalação e remoção do Chrome for Testing e do Playwright MCP</td></tr>
+    <tr><td><code>dev docs [key|install|remove]</code></td><td>Máquina</td><td>Estado da documentação do agente, chave de API do Context7 (<code>--remove</code> apaga), instalação e remoção do Context7 MCP</td></tr>
+    <tr><td><code>dev plugin update [nome]</code></td><td>Máquina</td><td>Traz a versão atual da receita e das notas do agente para plugins instalados</td></tr>
   </table>
 </section>
 

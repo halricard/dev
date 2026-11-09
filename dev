@@ -12,6 +12,8 @@
 #   dev fix                     recupera o ambiente meio de pé
 #   dev doctor
 #   dev agent add               gera a skill do dev para Claude, Codex ou Antigravity
+#   dev docs                    documentação atualizada para o agente (Context7)
+#   dev test                    suítes de teste da aplicação e usuário de teste temporário
 #
 # Nomes em inglês, prosa em português (contrato do CLAUDE.md).
 
@@ -68,6 +70,7 @@ usage() {
   ${C_BOLD:-}PLUGINS${C_RESET:-}
     plugin list         lista plugins disponíveis e instalados
     plugin install <n>  instala ferramentas de uma aplicação (wordpress, moodle, laravel)
+    plugin update [n]   traz a versão atual do plugin (receita, notas do agente)
     plugin remove <n>   remove o plugin e suas ferramentas adicionais
 
   ${C_BOLD:-}PROJETO${C_RESET:-}
@@ -97,11 +100,24 @@ usage() {
     open db             abre o Adminer direto no banco do projeto
     autostart on|off    sobe a pilha no início do sistema
 
+  ${C_BOLD:-}TESTES${C_RESET:-}
+    test                lista as suítes de teste da aplicação deste projeto
+    test <suíte> [args] roda a suíte (phpunit, behat, pest, e2e…); prepara na primeira vez
+    test init <suíte>   prepara a suíte de novo, depois de atualizar a aplicação
+    test user           cria um usuário de teste temporário (--remove apaga)
+    browser             estado do navegador do dev (Chrome for Testing e Playwright MCP)
+    browser install     instala o navegador para testes e para o agente de IA
+
   ${C_BOLD:-}AGENTES DE IA${C_RESET:-}
     agent add [alvo]    gera a skill do dev no projeto: claude, codex, antigravity ou all
+                        --browser também dá ao agente um navegador restrito ao projeto
+                        --docs também dá ao agente documentação atualizada (Context7)
     agent remove [alvo] remove a skill gerada pelo dev
-    agent update        regenera as skills depois de mudar o dev.conf
+    agent update        regenera as skills depois de mudar o dev.conf ou atualizar a aplicação
     agent list          mostra onde a skill está instalada
+    docs                estado da documentação do agente (Context7 MCP e chave de API)
+    docs key            grava a chave de API do Context7 em ~/.dev/config (--remove apaga)
+    docs install        instala o servidor MCP do Context7
 
   ${C_BOLD:-}PRIMEIROS PASSOS${C_RESET:-}
     → dev install
@@ -202,6 +218,18 @@ case "$subcommand" in
   agent)
     source "$DEV_ROOT/lib/agent.sh"
     cmd_agent "$@"
+    ;;
+  test)
+    source "$DEV_ROOT/lib/test.sh"
+    cmd_test "$@"
+    ;;
+  browser)
+    source "$DEV_ROOT/lib/browser.sh"
+    cmd_browser "$@"
+    ;;
+  docs)
+    source "$DEV_ROOT/lib/docs.sh"
+    cmd_docs "$@"
     ;;
   autostart)
     source "$DEV_ROOT/lib/autostart.sh"

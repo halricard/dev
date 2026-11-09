@@ -320,7 +320,10 @@ cmd_new() {
   database_credentials "$database"
   if [[ -n "$agent_chosen" ]]; then
     source "$DEV_ROOT/lib/agent.sh"
-    ( load_project "$dir" && cmd_agent add "$agent_chosen" ) || warn "não consegui gerar a skill para $agent_chosen"
+    # Com a chave do Context7 gravada, o agente já ganha a documentação.
+    local agent_flags=()
+    [[ -n "$(docs_api_key)" ]] && agent_flags+=(--docs)
+    ( load_project "$dir" && cmd_agent add "$agent_chosen" "${agent_flags[@]}" ) || warn "não consegui gerar a skill para $agent_chosen"
   else
     hint "dê contexto ao seu agente de IA com: $DEV agent add"
   fi
@@ -492,7 +495,8 @@ cmd_destroy() {
   if [[ -n "$database" ]] && running mysql; then
     mysql_cli -e "DROP DATABASE IF EXISTS \`$database\`;" 2>/dev/null || true
   fi
-  rm -rf "${dir:?}" "$DEV_SNAPSHOTS/${name:?}" "$DEV_UP/${name:?}" "$DEV_QUIET/${name:?}"
+  rm -rf "${dir:?}" "$DEV_SNAPSHOTS/${name:?}" "$DEV_UP/${name:?}" "$DEV_QUIET/${name:?}" \
+         "$DEV_HOME/test-users/${name:?}"
   rm -f "$DEV_LOG/$name"-*.log "$DEV_LOG/schedule-$name"-*.log \
         "$DEV_LOG/worker-$name"-*.log "$DEV_RUN/schedule-$name"-*.runs \
         "$DEV_RUN/worker-$name"-*.runs

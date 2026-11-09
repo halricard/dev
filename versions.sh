@@ -22,6 +22,16 @@ MOODLE_VERSION=""            # Vazio = branch estável mais recente
 MOODLE_BRANCH="503"          # Branch base de busca do Moodle (Moodle 5.3)
 LARAVEL_INSTALLER="5.32.0"   # Plugin Laravel; instalador oficial via Composer
 
+# Navegador de testes e do agente de IA, instalado sob demanda (dev browser install).
+# O Chrome for Testing não publica sha256; os valores abaixo foram conferidos no download.
+CHROME_VERSION="157.0.8103.38"   # https://googlechromelabs.github.io/chrome-for-testing/
+CHROME_SHA256="8cdeb344e9b2cefe59f4aea8d1d93d5d93054c03cde217665c16fc1f62e72a66"
+CHROMEDRIVER_SHA256="329525fa0bf02be19794de1e9475772ef64695e0456f142888bd70df3147dc1e"
+PLAYWRIGHT_MCP_VERSION="0.0.83"  # https://www.npmjs.com/package/@playwright/mcp
+
+# Documentação atualizada para o agente de IA, instalada sob demanda (dev docs install).
+CONTEXT7_MCP_VERSION="4.4.4"     # https://www.npmjs.com/package/@upstash/context7-mcp
+
 # Portas padrão.
 # Portas altas para serviços auxiliares evitam colisão com instâncias do sistema.
 HTTP_PORT="80"
@@ -29,3 +39,4 @@ HTTPS_PORT="443"
 MYSQL_PORT="13306"
 SMTP_PORT="11025"
 MAILPIT_UI_PORT="18025"
+CHROMEDRIVER_PORT="14444"
