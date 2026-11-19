@@ -1,6 +1,6 @@
 ---
 name: dev
-description: Run, inspect and administer the "{{PROJECT}}" {{APP_TITLE}} project through the `dev` CLI. Use it for any task that runs PHP, Composer, Node, the database, the web server, logs, snapshots or the site URL in this project.
+description: Run, inspect and administer the "{{PROJECT}}" {{APP_TITLE}} project through the `dev` CLI, and choose the tools for each phase of a feature (specify, design, tasks, execute, verify, deliver). Use it for any task that runs PHP, Composer, Node, the database, the web server, logs, snapshots or the site URL in this project, and before each phase of feature work.
 ---
 <!-- generated-by: dev agent -->
 # Working on this project with `dev`
@@ -57,18 +57,9 @@ Settings live in `dev.conf` at the project root. Run all commands from inside th
 - Run the relevant suite after changing code. Write new tests in the application's own format (see the notes below).
 - Test suites use their own tables and data directories. They never touch the site's data.
 
-## Browser and test account
+## Test account
 
 - `dev test user` creates a temporary test account and prints its login and password. Each call sets a new password. `dev test user --no-admin` creates it without admin rights. `dev test user --remove` deletes it, and `dev down` deletes it too.
 - Log in with that account when you test in the browser. Never use, read or reset the real administrator account.
-- If the `dev-browser` MCP server is available, use it to open and inspect the site at {{URL}}. It only reaches this project, its test address ({{TEST_URL}}) and Mailpit (https://mail.localhost), where you can read e-mail the site sent.
-- Use the browser to check behaviour now. For checks that must keep passing, write a test in the suite.
 
-## Up-to-date documentation
-
-- If the `dev-docs` MCP server (Context7) is available, look up the documentation before you write or change code that uses {{APP_TITLE}} APIs, hooks, configuration or CLI commands, and before you add or upgrade a package. Do not rely on memory for APIs that change between versions.
-- Use the library IDs in the notes below and pass them straight to `query-docs`. Call `resolve-library-id` only for other packages, such as a Composer or npm dependency of this project.
-- Ask one specific question per `query-docs` call. Match the documentation to the version above: when an ID accepts a version (`/org/project/version`), use the one this project runs.
-- Follow what the documentation says over what you remember. If it contradicts the code in this project, trust the code and mention the difference.
-
-{{APP_NOTES}}
+{{TOOLS}}{{APP_NOTES}}

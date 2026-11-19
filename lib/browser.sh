@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Navegador gerenciado pelo dev: Chrome for Testing, chromedriver e o servidor
 # MCP do Playwright. Atende as suítes de teste de navegador (Behat, Dusk) e dá
-# ao agente de IA um navegador restrito aos endereços do projeto.
+# ao Claude Code um navegador restrito aos endereços do projeto.
 #
 # Tudo é opcional e fica em ~/.dev/runtime; nada vai para o projeto.
 
@@ -137,7 +137,7 @@ browser_install_all() {
   browser_install_deps || true
   install_playwright_mcp || die "a instalação do Playwright MCP falhou"
   blank
-  hint "suítes de navegador: $DEV test      agente com navegador: $DEV agent add claude --browser"
+  hint "suítes de navegador: $DEV test      Claude Code com navegador: $DEV agent add --playwright"
   blank
 }
 
@@ -157,7 +157,7 @@ browser_status() {
   printf '  %b  %-16s %s\n' "$mark" "Chrome" "for Testing $CHROME_VERSION"
   printf '  %b  %-16s %s\n' "$mark" "chromedriver" "porta $CHROMEDRIVER_PORT, só durante os testes"
   if playwright_mcp_installed; then mark="${C_GREEN}✔${C_RESET}"; else mark="${C_DIM}○${C_RESET}"; fi
-  printf '  %b  %-16s %s\n' "$mark" "Playwright MCP" "$PLAYWRIGHT_MCP_VERSION  navegador do agente de IA"
+  printf '  %b  %-16s %s\n' "$mark" "Playwright MCP" "$PLAYWRIGHT_MCP_VERSION  navegador do Claude Code"
   blank
   if ! browser_installed || ! playwright_mcp_installed; then
     hint "instale com: $DEV browser install"

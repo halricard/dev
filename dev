@@ -11,8 +11,8 @@
 #   dev start | stop | status
 #   dev fix                     recupera o ambiente meio de pé
 #   dev doctor
-#   dev agent add               gera a skill do dev para Claude, Codex ou Antigravity
-#   dev docs                    documentação atualizada para o agente (Context7)
+#   dev agent add               gera a skill do dev para o Claude Code
+#   dev context7                documentação atualizada para o Claude Code (Context7)
 #   dev test                    suítes de teste da aplicação e usuário de teste temporário
 #
 # Nomes em inglês, prosa em português (contrato do CLAUDE.md).
@@ -106,18 +106,24 @@ usage() {
     test init <suíte>   prepara a suíte de novo, depois de atualizar a aplicação
     test user           cria um usuário de teste temporário (--remove apaga)
     browser             estado do navegador do dev (Chrome for Testing e Playwright MCP)
-    browser install     instala o navegador para testes e para o agente de IA
+    browser install     instala o navegador para testes e para o Claude Code
 
-  ${C_BOLD:-}AGENTES DE IA${C_RESET:-}
-    agent add [alvo]    gera a skill do dev no projeto: claude, codex, antigravity ou all
-                        --browser também dá ao agente um navegador restrito ao projeto
-                        --docs também dá ao agente documentação atualizada (Context7)
-    agent remove [alvo] remove a skill gerada pelo dev
-    agent update        regenera as skills depois de mudar o dev.conf ou atualizar a aplicação
-    agent list          mostra onde a skill está instalada
-    docs                estado da documentação do agente (Context7 MCP e chave de API)
-    docs key            grava a chave de API do Context7 em ~/.dev/config (--remove apaga)
-    docs install        instala o servidor MCP do Context7
+  ${C_BOLD:-}CLAUDE CODE${C_RESET:-}
+    agent add           gera a skill do dev para o Claude Code no projeto; cada ferramenta é opcional:
+                        --playwright  navegador restrito ao projeto
+                        --context7    documentação atualizada da aplicação
+                        --figma       arquivos de design (servidor remoto do Figma)
+                        --penpot      arquivos de design no Penpot, alternativa ao Figma
+                        --github      issues, branches e PRs (servidor remoto do GitHub)
+                        --impeccable  direção de UI (instalador oficial)
+                        --tlc         método spec-driven TLC (instalador oficial)
+                        --all         todas as ferramentas, com o Figma e o TLC como padrões
+    agent remove        remove a skill, os servidores MCP e o bloco do CLAUDE.md gerados pelo dev
+    agent update        regenera a skill depois de mudar o dev.conf, a aplicação ou as ferramentas
+    agent list          mostra a skill e as ferramentas instaladas no projeto
+    agent key [nome]    grava a chave de uma ferramenta em ~/.dev/config: context7, github ou penpot (--remove apaga)
+    context7            estado do Context7 MCP e da chave de API
+    context7 install    instala o servidor MCP do Context7
 
   ${C_BOLD:-}PRIMEIROS PASSOS${C_RESET:-}
     → dev install
@@ -227,9 +233,9 @@ case "$subcommand" in
     source "$DEV_ROOT/lib/browser.sh"
     cmd_browser "$@"
     ;;
-  docs)
-    source "$DEV_ROOT/lib/docs.sh"
-    cmd_docs "$@"
+  context7)
+    source "$DEV_ROOT/lib/context7.sh"
+    cmd_context7 "$@"
     ;;
   autostart)
     source "$DEV_ROOT/lib/autostart.sh"

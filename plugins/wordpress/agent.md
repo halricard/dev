@@ -21,3 +21,9 @@
 - `/wordpress/gutenberg` — the block editor: `block.json`, block APIs and `@wordpress/*` packages.
 - `/wp-cli/handbook` — WP-CLI commands.
 - Check the "Since" and deprecation notes against the version above before you use a function or hook.
+
+### WordPress UI
+
+- Admin screens use the WordPress admin markup and styles (`wrap`, `form-table`, `button-primary`, admin notices), or `@wordpress/components` in React-based screens. Blocks follow `block.json` and the block editor's components.
+- The interface inherits the admin and the active theme. On the front end, use the theme's `theme.json` presets instead of hard-coded colours, fonts or spacing.
+- Every string uses the plugin's text domain.

@@ -12,7 +12,7 @@ commands_from_usage() {
 
 commands_from_case() {
   sed -n '/^case "\$subcommand" in/,/^esac/p' "$ROOT/dev" \
-    | grep -oE '^  [a-z|]+\)' | tr -d ' )' | tr '|' '\n' \
+    | grep -oE '^  [a-z0-9|]+\)' | tr -d ' )' | tr '|' '\n' \
     | grep -vxE 'help' | sort -u
 }
 

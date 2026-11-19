@@ -195,7 +195,7 @@ database_credentials() {
 }
 
 cmd_new() {
-  local app="" name="" php_chosen="" agent_chosen=""
+  local app="" name="" php_chosen=""
   if [[ $# -ge 2 ]]; then
     app="$1"
     name="$2"
@@ -208,7 +208,6 @@ cmd_new() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --php) php_chosen="${2:-}"; shift ;;
-      --agent) agent_chosen="${2:-}"; shift ;;
       -*)    die "opção desconhecida: $1" ;;
       *)     [[ -z "$name" ]] && name="$1" ;;
     esac
@@ -318,15 +317,7 @@ cmd_new() {
     recipe_next_steps "$dir" "$name"
   fi
   database_credentials "$database"
-  if [[ -n "$agent_chosen" ]]; then
-    source "$DEV_ROOT/lib/agent.sh"
-    # Com a chave do Context7 gravada, o agente já ganha a documentação.
-    local agent_flags=()
-    [[ -n "$(docs_api_key)" ]] && agent_flags+=(--docs)
-    ( load_project "$dir" && cmd_agent add "$agent_chosen" "${agent_flags[@]}" ) || warn "não consegui gerar a skill para $agent_chosen"
-  else
-    hint "dê contexto ao seu agente de IA com: $DEV agent add"
-  fi
+  hint "prepare o Claude Code com: cd $name && $DEV agent add   (--all traz todas as ferramentas)"
   blank
   cmd_open "$name" || true
 }
@@ -422,9 +413,10 @@ serve_project() {
     local site_now="${PROJECT_NAME:-$(basename "$dir")}"
     local php_now="${PROJECT_PHP:-$(config_get DEFAULT_PHP)}"
     stop_site_tasks "$site_now" 2>/dev/null || true
-    start_site_tasks "$site_now" "$dir" "$php_now" schedule 2>/dev/null || true
+    # start_site_tasks escreve quantas tarefas subiu; aqui o número não é usado.
+    start_site_tasks "$site_now" "$dir" "$php_now" schedule >/dev/null 2>&1 || true
     if [[ -f "$DEV_UP/$site_now" ]]; then
-      start_site_tasks "$site_now" "$dir" "$php_now" worker 2>/dev/null || true
+      start_site_tasks "$site_now" "$dir" "$php_now" worker >/dev/null 2>&1 || true
     fi
   fi
 

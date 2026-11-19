@@ -19,3 +19,8 @@
 - `/laravel/framework` — the framework source, for exact class and method signatures.
 - `/pestphp/docs` — Pest, including browser tests.
 - Look up first-party packages (Livewire, Inertia, Sanctum, Horizon, Filament) with `resolve-library-id`, using the version in `composer.lock`.
+
+### Laravel UI
+
+- Reuse the project's components and layouts before you create new ones (in the starter kits, `resources/js/components` and `resources/js/layouts`, or the Blade components in `resources/views/components`).
+- Use the design tokens the project already defines (for Tailwind, the theme in `resources/css/app.css`) instead of hard-coded colours, fonts or spacing, and keep the dark mode the project already supports.

@@ -19,3 +19,9 @@
 - `/moodle/devdocs` — the source of the same documentation, useful when the first ID has no answer.
 - `/moodle/moodle` — Moodle source code, for exact function and class signatures.
 - Moodle APIs change between releases. Check the version above and look for deprecation notes before you use an API.
+
+### Moodle UI
+
+- New screens use Mustache templates in the plugin's `templates/`, rendered through the Output API (renderers and renderables), and AMD modules in `amd/src/`. Rebuild `amd/build/` with grunt after changing JavaScript.
+- The interface inherits the site theme (Boost). Use Bootstrap classes and core components (`core/modal`, `core/notification`, core templates and pix icons) instead of custom styles. Do not hard-code colours, fonts or spacing.
+- Every string comes from the plugin's language file (`lang/en/`).

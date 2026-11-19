@@ -66,7 +66,7 @@ O site estará disponível imediatamente em `https://meu-blog.localhost`.
    - `dev snapshot checkpoint1` (salva estado completo do banco e arquivos)
    - `dev restore checkpoint1` (restaura se algo der errado)
 
-### Testes e navegador do agente
+### Testes
 
 Cada aplicação traz as suítes de teste oficiais dela, e `dev test` as roda com o PHP, o Node e o banco do projeto:
 
@@ -88,20 +88,46 @@ dev test user                          # conta temporária para testar no navega
 
 `dev test user` cria a conta `devtest` com senha nova a cada chamada; o `dev down` a apaga. A conta de administrador real nunca é usada nos testes.
 
-Para dar ao agente de IA um navegador restrito ao projeto (Playwright MCP, headless, sem perfil em disco), use `dev agent add claude --browser`. A configuração gravada no `.mcp.json` só chama `dev browser mcp <projeto>`, sem segredo nem caminho da máquina.
+### Claude Code
 
-### Documentação atualizada para o agente
+`dev agent add` gera só a skill do dev em `.claude/skills/dev/SKILL.md`: ela ensina o Claude Code a rodar tudo pelo `dev`, a usar o `dev test` e a testar com o usuário temporário. Cada ferramenta é opcional e entra por uma flag com o nome dela:
 
-Com `--docs`, o agente consulta a documentação atual da aplicação pelo [Context7](https://context7.com) em vez de confiar na memória:
+| Flag | O que entra no projeto |
+|---|---|
+| `--playwright` | servidor `dev-playwright` no `.mcp.json`: Playwright MCP em versão fixada, com o Chrome do dev, headless, sem perfil em disco e restrito ao site, ao endereço de teste e ao Mailpit |
+| `--context7` | servidor `dev-context7`: Context7 MCP em versão fixada; a chave (opcional) fica em `~/.dev/config`, gravada com `dev agent key context7` |
+| `--figma` | servidor remoto `figma` (`https://mcp.figma.com/mcp`); autentique no Claude Code em `/mcp` |
+| `--penpot` | servidor remoto `penpot`, alternativa ao Figma; o `.mcp.json` guarda só `${PENPOT_MCP_KEY}` (e `${PENPOT_URL}`, para um Penpot próprio), a chave é gravada com `dev agent key penpot`, e o plugin MCP fica conectado numa aba do Penpot |
+| `--github` | servidor `github`, iniciado pelo dev (`dev agent mcp github`), que leva ao servidor remoto do GitHub o token gravado com `dev agent key github` |
+| `--impeccable` | skill de direção de UI, pelo instalador oficial (versão atual, não fixada pelo dev), sem os hooks do detector de design |
+| `--tlc` | método spec-driven TLC, pelo instalador oficial (versão atual), e um bloco marcado no `CLAUDE.md` que liga as fases do método à skill do dev |
+| `--all` | todas as ferramentas, com o Figma e o TLC como padrões; `--all --penpot` troca o Figma pelo Penpot |
 
 ```bash
-dev docs key                            # grava a chave de API em ~/.dev/config (pede sem eco)
-dev agent add claude --docs             # instala o Context7 MCP e registra o servidor dev-docs
+dev agent add                    # só a skill do dev
+dev agent add --figma --github   # a skill e essas duas ferramentas
+dev agent add --all              # tudo, com o Figma e o TLC como padrões
+dev agent add --all --penpot     # tudo, com o Penpot no lugar do Figma
+dev agent list                   # o que está instalado neste projeto
 ```
 
-A skill informa a versão instalada da aplicação (lida de `vendor/`, `wp-includes/version.php` ou `version.php`) e os IDs do Context7 de cada uma: `/laravel/docs/<major>.x` e `/pestphp/docs` no Laravel, as referências e os handbooks de developer.wordpress.org no WordPress, `/websites/moodledev_io` no Moodle. Rode `dev agent update` depois de atualizar a aplicação.
+A skill descreve só as ferramentas presentes no projeto, cada uma com as fases em que entra (contexto, especificar, desenhar, tarefas, executar, verificar, entregar), e traz as notas de UI da aplicação que o Figma e o impeccable seguem. Rode `dev agent update` depois de mudar o `dev.conf`, atualizar a aplicação ou instalar e tirar ferramentas. O `dev agent remove` tira a skill, os servidores e o bloco do `CLAUDE.md` gerados pelo dev; o TLC e o impeccable ficam, porque vieram dos instaladores oficiais.
 
-A configuração no projeto só chama `dev docs mcp`; a chave fica fora do projeto e do git e chega ao servidor por variável de ambiente. Com a chave gravada, `dev new --agent <alvo>` já inclui a documentação.
+Nenhum arquivo gravado no projeto leva senha, chave, token ou caminho da máquina, então todos podem ir para o git. Os servidores `dev-playwright`, `dev-context7` e `github` só chamam `dev browser mcp <projeto>`, `dev context7 mcp` e `dev agent mcp github`; o dev entrega as chaves por variável de ambiente.
+
+As chaves ficam num lugar só, `~/.dev/config` (permissão 600):
+
+```bash
+dev agent key context7           # pede a chave sem mostrar, confere no Context7 e grava
+dev agent key github             # idem para o token do GitHub
+dev agent key penpot             # a chave do servidor MCP do Penpot
+dev agent key                    # mostra as chaves gravadas, mascaradas
+dev agent key github --remove    # apaga
+```
+
+O Penpot monta a URL do servidor com a chave, e o Claude Code a lê do próprio ambiente. Por isso o `dev agent key penpot` também mantém no `~/.bashrc` um bloco marcado que lê a chave de `~/.dev/config` a cada terminal novo; o bloco não guarda a chave. Depois de gravá-la, abra um terminal novo antes de abrir o Claude Code.
+
+Com o Context7, a skill informa a versão instalada da aplicação (lida de `vendor/`, `wp-includes/version.php` ou `version.php`) e os IDs do Context7 de cada uma: `/laravel/docs/<major>.x` e `/pestphp/docs` no Laravel, as referências e os handbooks de developer.wordpress.org no WordPress, `/websites/moodledev_io` no Moodle.
 
 ---
 
@@ -141,9 +167,9 @@ dev passwd              redefine a senha do admin
 dev open                abre o site, mailpit ou adminer no navegador
 dev autostart           sobe a pilha no início do sistema
 dev test                suítes de teste da aplicação e usuário de teste temporário (test user)
-dev browser             navegador do dev para testes e para o agente de IA (status, install, remove)
-dev agent               gera a skill do dev para Claude, Codex ou Antigravity (add, remove, update, list; --browser, --docs)
-dev docs                documentação atualizada para o agente via Context7 (status, key, install, remove)
+dev browser             navegador do dev para testes e para o Claude Code (status, install, remove)
+dev agent               skill do dev e ferramentas do Claude Code (add, remove, update, list, key; --playwright, --context7, --figma, --penpot, --github, --impeccable, --tlc, --all)
+dev context7            Context7 MCP para o Claude Code (status, install, remove); a chave: dev agent key context7
 ```
 
 ---
