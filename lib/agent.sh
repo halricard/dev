@@ -391,10 +391,11 @@ agent_add() {
   step "SKILL DO DEV PARA O CLAUDE CODE"
   agent_write
   agent_claude_sync
+  agent_gitignore
   agent_pending
   blank
   hint "a skill descreve este projeto ($PROJECT_NAME); regenere após mudar o dev.conf, atualizar a aplicação ou instalar ferramentas: $DEV agent update"
-  hint "pode versionar os arquivos no git; para não versionar, adicione-os ao .gitignore"
+  hint "faça commit do .mcp.json, do .claude/ e do CLAUDE.md: quem clonar prepara a máquina com $DEV agent update"
   blank
 }
 
@@ -465,6 +466,139 @@ agent_pending() {
   return 0
 }
 
+# ------------------------------------------------- esta máquina e o projeto
+# O .mcp.json vem do git, mas cada servidor do dev precisa de um programa
+# nesta máquina. Num clone, o dev agent update os instala.
+
+AGENT_MACHINE_TOOLS=(playwright context7 github)
+
+agent_machine_ready() {
+  case "$1" in
+    playwright) browser_installed && playwright_mcp_installed ;;
+    context7)   context7_mcp_installed ;;
+    github)     mcp_remote_installed ;;
+    *)          return 0 ;;
+  esac
+}
+
+# As ferramentas do projeto que esta máquina ainda não tem.
+agent_machine_missing() {
+  local tool
+  for tool in "${AGENT_MACHINE_TOOLS[@]}"; do
+    agent_tool_enabled "$tool" && ! agent_machine_ready "$tool" && printf '%s\n' "$tool"
+  done
+  return 0
+}
+
+agent_machine_install() {
+  local tool missing=()
+  mapfile -t missing < <(agent_machine_missing)
+  (( ${#missing[@]} > 0 )) || return 0
+  step "FERRAMENTAS DO CLAUDE CODE NESTA MÁQUINA"
+  for tool in "${missing[@]}"; do
+    case "$tool" in
+      playwright)
+        install_browser
+        browser_install_deps || true
+        install_playwright_mcp || die "a instalação do Playwright MCP falhou" ;;
+      context7)
+        install_context7_mcp || die "a instalação do Context7 MCP falhou" ;;
+      github)
+        install_mcp_remote || die "a instalação do mcp-remote falhou" ;;
+    esac
+  done
+}
+
+# Aviso do dev up: o projeto usa ferramentas que esta máquina não tem, ou cuja
+# chave pessoal falta. Não instala nada: o Chrome é grande e pede sudo apt.
+agent_machine_hint() {
+  [[ -f "$(agent_mcp_json_file)" ]] || return 0
+  local tool missing=() titles=""
+  mapfile -t missing < <(agent_machine_missing)
+  if agent_tool_enabled github && [[ -z "$(key_value github)" ]]; then
+    [[ " ${missing[*]} " == *" github "* ]] || missing+=(github)
+  fi
+  if agent_tool_enabled penpot && [[ -z "$(key_value penpot)" ]]; then
+    missing+=(penpot)
+  fi
+  (( ${#missing[@]} > 0 )) || return 0
+  for tool in "${missing[@]}"; do
+    titles+="${titles:+, }$(agent_tool_title "$tool")"
+  done
+  info "o Claude Code deste projeto usa $titles, que esta máquina ainda não tem pronto"
+  hint "prepare com: $DEV agent update"
+}
+
+# ------------------------------------------------------------- .gitignore
+# Os arquivos do Claude Code que são do time vão para o git; os pessoais ficam
+# fora, como o Claude Code espera: as permissões aprovadas
+# (.claude/settings.local.json) e as notas pessoais (CLAUDE.local.md).
+
+AGENT_GIT_SHARED=(.mcp.json .claude/ CLAUDE.md .specs/)
+AGENT_GIT_PERSONAL=(.claude/settings.local.json CLAUDE.local.md)
+# O binário do impeccable (23 MB, um por sistema): o lançador da skill o baixa
+# na primeira execução e confere contra o engine-checksums.txt versionado.
+AGENT_GIT_MACHINE=(.claude/skills/impeccable/scripts/bin/)
+
+agent_git_repo() { git -C "$PROJECT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; }
+
+# Se o .gitignore deixa o caminho de fora. Num diretório, vale o que há dentro.
+agent_git_ignored() {
+  local path="$1" probe="$1"
+  [[ "$path" == */ ]] && probe="${path}SKILL.md"
+  if agent_git_repo; then
+    # Só o .gitignore do projeto conta: as regras globais desta máquina
+    # (~/.config/git/ignore) não vão junto para quem clonar.
+    git -C "$PROJECT_DIR" -c core.excludesFile=/dev/null check-ignore -q --no-index -- "$probe"
+  else
+    # Sem git, o dev entende o próprio .gitignore: /* ignora a raiz inteira e
+    # cada !/<nome> libera um item dela.
+    local file="$PROJECT_DIR/.gitignore" top="${path%%/*}"
+    grep -qxF "/$path" "$file" && return 0
+    grep -qx '/\*' "$file" || return 1
+    ! grep -qxF "!/$top/" "$file" && ! grep -qxF "!/$top" "$file"
+  fi
+}
+
+agent_gitignore() {
+  local file="$PROJECT_DIR/.gitignore" path header=0 shared=() personal=() machine=()
+  [[ -f "$file" ]] || return 0
+  agent_gitignore_line() {
+    (( header++ )) || printf '\n# Claude Code — acrescentado pelo dev agent\n' >> "$file"
+    printf '%s\n' "$1" >> "$file"
+  }
+  [[ -z "$(tail -c1 "$file")" ]] || printf '\n' >> "$file"
+  for path in "${AGENT_GIT_SHARED[@]}"; do
+    agent_git_ignored "$path" || continue
+    agent_gitignore_line "!/$path"
+    shared+=("$path")
+  done
+  # Os pessoais depois: liberar .claude/ acima pode tê-los liberado também.
+  for path in "${AGENT_GIT_PERSONAL[@]}"; do
+    agent_git_ignored "$path" && continue
+    agent_gitignore_line "/$path"
+    personal+=("$path")
+  done
+  for path in "${AGENT_GIT_MACHINE[@]}"; do
+    agent_git_ignored "$path" && continue
+    agent_gitignore_line "/$path"
+    machine+=("$path")
+  done
+  unset -f agent_gitignore_line
+  (( ${#shared[@]} == 0 )) || ok ".gitignore  passa a versionar ${shared[*]}"
+  (( ${#personal[@]} == 0 )) || ok ".gitignore  deixa de fora o que é pessoal: ${personal[*]}"
+  (( ${#machine[@]} == 0 )) || ok ".gitignore  deixa de fora o que cada máquina baixa: ${machine[*]}"
+
+  if agent_git_repo; then
+    for path in "${AGENT_GIT_PERSONAL[@]}" "${AGENT_GIT_MACHINE[@]}"; do
+      git -C "$PROJECT_DIR" ls-files --error-unmatch -- "$path" >/dev/null 2>&1 || continue
+      warn "$path não é do time, mas já está no git"
+      hint "tire do git sem apagar do disco: git rm -r --cached $path"
+    done
+  fi
+  return 0
+}
+
 agent_remove() {
   require_project
   [[ $# -eq 0 ]] || die "uso: ${DEV_COMMAND:-$DEV agent} remove"
@@ -514,6 +648,9 @@ agent_update() {
   done
   agent_write
   agent_claude_sync
+  agent_gitignore
+  agent_machine_install
+  agent_pending
   blank
 }
 

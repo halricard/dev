@@ -83,8 +83,10 @@ setup() {
 source "$DEV_ROOT/plugins/moodle/recipe.sh"
 recipe_install() {
   local dir="$1"
-  mkdir -p "$dir/app/public"
-  touch "$dir/app/public/index.php"
+  mkdir -p "$dir/app/public/lib"
+  touch "$dir/app/public/index.php" "$dir/app/public/lib/setup.php"
+  printf "<?php\n\$version  = 2026100501.00;\n\$release  = '5.3.1 (Build: 20261112)';\n\$branch   = '503';\n" \
+    > "$dir/app/public/version.php"
 }
 EOF
 
@@ -107,6 +109,7 @@ EOF
     cmd_new moodle meu-moodle
     test -f "$PWD/meu-moodle/dev.conf"
     grep -q "PHP=\"8.4\"" "$PWD/meu-moodle/dev.conf"
+    grep -qx "MOODLE_VERSION=\"5.3.1\"" "$PWD/meu-moodle/dev.conf"
   '
   [ "$status" -eq 0 ]
   [[ "$output" == *"COMPILAÇÃO SOB DEMANDA: PHP 8.4"* ]]

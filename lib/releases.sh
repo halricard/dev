@@ -17,8 +17,9 @@ pinned_version() {
     adminer)   printf '%s\n' "$ADMINER_VERSION" ;;
     mkcert)    printf '%s\n' "$MKCERT_VERSION" ;;
     wpcli)     printf '%s\n' "$WPCLI_VERSION" ;;
-    wordpress) printf '%s\n' "$WORDPRESS_VERSION" ;;
-    moodle)    printf '%s\n' "$MOODLE_VERSION" ;;
+    # A versão do WordPress e a do Moodle são de cada projeto (dev.conf).
+    wordpress) printf '%s\n' "${WORDPRESS_VERSION:-}" ;;
+    moodle)    printf '%s\n' "${MOODLE_VERSION:-}" ;;
     chrome|chromedriver) printf '%s\n' "$CHROME_VERSION" ;;
   esac
 }
@@ -37,6 +38,7 @@ cache_name() {
     wpcli)     printf 'wp-cli-%s.phar\n' "$version" ;;
     wordpress) printf 'wordpress-%s.tar.gz\n' "${version:-latest}" ;;
     moodle)    printf 'moodle-%s.tgz\n' "${version:-latest}" ;;
+    moodlegit) printf 'moodle-git-%s.tar.gz\n' "$version" ;;
     chrome)    printf 'chrome-%s-linux64.zip\n' "$version" ;;
     chromedriver) printf 'chromedriver-%s-linux64.zip\n' "$version" ;;
     wpdevelop) printf 'wordpress-develop-%s.tar.gz\n' "$version" ;;
@@ -64,10 +66,14 @@ url_for() {
         [[ -z "$branch" || "$branch" == "latest" ]] && branch="$MOODLE_BRANCH"
         printf 'https://download.moodle.org/download.php/direct/stable%s/moodle-latest-%s.tgz\n' "$branch" "$branch"
       else
+        # O diretório da branch tem a versão menor com dois dígitos: 4.5 → stable405.
         local major="${version%%.*}" minor="${version#*.}"
         minor="${minor%%.*}"
-        printf 'https://download.moodle.org/download.php/direct/stable%s%s/moodle-%s.tgz\n' "$major" "$minor" "$version"
+        printf 'https://download.moodle.org/download.php/direct/stable%s%02d/moodle-%s.tgz\n' "$major" "$((10#$minor))" "$version"
       fi ;;
+    moodlegit)
+      # Pacote do GitHub para um commit: é como se reproduz uma build semanal.
+      printf 'https://github.com/moodle/moodle/archive/%s.tar.gz\n' "$version" ;;
     chrome|chromedriver)
       printf 'https://storage.googleapis.com/chrome-for-testing-public/%s/linux64/%s-linux64.zip\n' "$version" "$component" ;;
     wpdevelop)

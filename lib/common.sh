@@ -321,8 +321,46 @@ project_conf_set() {
   if grep -qE "^${key}=" "$file"; then
     sed -i -E "s|^${key}=.*|${key}=\"${value}\"|" "$file"
   else
+    # Um arquivo sem quebra no fim grudaria a chave nova na última linha.
+    [[ -s "$file" && -n "$(tail -c1 "$file")" ]] && printf '\n' >> "$file"
     printf '%s="%s"\n' "$key" "$value" >> "$file"
   fi
+}
+
+project_conf_unset() {
+  local file="$1" key="$2"
+  grep -qE "^${key}=" "$file" 2>/dev/null || return 0
+  sed -i -E "/^${key}=/d" "$file"
+}
+
+# Imprime o campo de texto <campo> de cada objeto do vetor de primeiro nível
+# de um JSON lido da entrada, como a lista de commits da API do GitHub. Campos
+# de mesmo nome em objetos aninhados ficam de fora. Não depende do formato:
+# JSON indentado ou numa linha só dão o mesmo resultado.
+json_array_field() {
+  awk -v field="$1" '
+    { text = text $0 "\n" }
+    END {
+      n = length(text); depth = 0; last = ""; expect = 0
+      for (i = 1; i <= n; i++) {
+        c = substr(text, i, 1)
+        if (c == "\"") {
+          s = ""
+          for (i++; i <= n; i++) {
+            c = substr(text, i, 1)
+            if (c == "\\") { i++; s = s substr(text, i, 1); continue }
+            if (c == "\"") break
+            s = s c
+          }
+          if (expect) { print s; expect = 0 } else last = s
+          continue
+        }
+        if (c == ":") { expect = (depth == 2 && last == field); last = ""; continue }
+        if (c == ",") { expect = 0; last = ""; continue }
+        if (c == "{" || c == "[") { depth++; expect = 0 }
+        else if (c == "}" || c == "]") { depth--; expect = 0 }
+      }
+    }'
 }
 
 # --------------------------------------------------------- config da máquina
@@ -477,6 +515,7 @@ RECIPE_HOOKS=(
   recipe_gitignore recipe_schedule recipe_workers
   recipe_test_suites recipe_test_ready recipe_test_init recipe_test_run
   recipe_test_user_create recipe_test_user_remove recipe_version
+  recipe_pin recipe_pin_key
 )
 
 unload_recipe() {

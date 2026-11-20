@@ -21,23 +21,150 @@ recipe_version() {
   return 1
 }
 
+# ------------------------------------------------------------ versão fixada
+# O dev.conf guarda MOODLE_VERSION e, para quem não está numa release,
+# MOODLE_COMMIT: o commit do github.com/moodle/moodle com o mesmo código.
+
+MOODLE_GITHUB_API="https://api.github.com/repos/moodle/moodle"
+MOODLE_GITHUB_RAW="https://raw.githubusercontent.com/moodle/moodle"
+
+recipe_pin_key() { printf 'MOODLE_VERSION\n'; }
+
+# O version.php do núcleo, relativo a app/: na raiz até o 5.0, em public/ desde o 5.1.
+moodle_version_path() {
+  local root candidate
+  root="$(moodle_root "$1")"
+  for candidate in version.php public/version.php; do
+    [[ -f "$root/$candidate" && -f "$root/${candidate%version.php}lib/setup.php" ]] \
+      && { printf '%s\n' "$candidate"; return 0; }
+  done
+  return 1
+}
+
+# Um campo do version.php: version (2026100501.01), release ('5.3.1+ (Build: …)') ou branch ('503').
+moodle_field() {
+  grep -oP "^\\\$$2\s*=\s*'?\K[^';]*[^';\s]" "$1" 2>/dev/null | head -1 || true
+}
+
+# Os commits que mexeram no version.php da ref, entre duas datas, do mais novo
+# ao mais antigo. Saída: 0 ok · 1 sem rede · 2 limite de consultas · 3 ref inexistente.
+moodle_commits() {
+  local ref="$1" path="$2" since="$3" until="$4" body code
+  body="$(mktemp -p "$DEV_TMP")"
+  code="$(curl -sS -L --max-time 30 -H 'Accept: application/vnd.github+json' -o "$body" -w '%{http_code}' \
+    "$MOODLE_GITHUB_API/commits?sha=$ref&path=$path&since=$since&until=$until&per_page=100" 2>/dev/null || echo 000)"
+  case "$code" in
+    200)         json_array_field sha < "$body"; rm -f "$body"; return 0 ;;
+    403|429)     rm -f "$body"; return 2 ;;
+    404|409|422) rm -f "$body"; return 3 ;;
+    *)           rm -f "$body"; return 1 ;;
+  esac
+}
+
+# O commit cujo version.php tem exatamente o version e o release instalados.
+# Cada build semanal sobe o version, então só um commit casa com os dois. A
+# busca fica nas semanas em torno da data do build, numa consulta só à API.
+moodle_find_commit() {
+  local path="$1" version="$2" release="$3" branch="$4"
+  local build since until ref sha list file rc=0
+  build="$(grep -oP 'Build: \K[0-9]{8}' <<<"$release" || true)"
+  [[ -n "$build" ]] || { bad "o release \"$release\" não traz a data do build" >&2; return 1; }
+  since="$(date -u -d "$build -21 days" +%Y-%m-%dT00:00:00Z)"
+  until="$(date -u -d "$build +8 days" +%Y-%m-%dT00:00:00Z)"
+  list="$(mktemp -p "$DEV_TMP")"
+  file="$(mktemp -p "$DEV_TMP")"
+  # A branch estável primeiro; a versão em desenvolvimento só existe na main.
+  for ref in "MOODLE_${branch}_STABLE" main; do
+    rc=0
+    moodle_commits "$ref" "$path" "$since" "$until" > "$list" || rc=$?
+    (( rc == 3 )) && continue
+    (( rc == 0 )) || break
+    while IFS= read -r sha; do
+      [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || continue
+      curl -fsSL --max-time 30 -o "$file" "$MOODLE_GITHUB_RAW/$sha/$path" 2>/dev/null || continue
+      if [[ "$(moodle_field "$file" version)" == "$version" && "$(moodle_field "$file" release)" == "$release" ]]; then
+        rm -f "$list" "$file"
+        printf '%s\n' "$sha"
+        return 0
+      fi
+    done < "$list"
+    break
+  done
+  rm -f "$list" "$file"
+  case "$rc" in
+    2) bad "o GitHub recusou a consulta: limite de 60 por hora sem login — tente de novo mais tarde" >&2 ;;
+    1) bad "não consegui consultar o GitHub (sem rede?)" >&2 ;;
+  esac
+  return 1
+}
+
+# Imprime as chaves do dev.conf para a versão instalada em <dir>.
+recipe_pin() {
+  local dir="$1" root path version release branch short commit
+  root="$(moodle_root "$dir")"
+  path="$(moodle_version_path "$dir")" || {
+    bad "não achei o núcleo do Moodle em ${root#"$dir"/}/ (version.php)" >&2
+    return 1
+  }
+  release="$(moodle_field "$root/$path" release)"
+  version="$(moodle_field "$root/$path" version)"
+  branch="$(moodle_field "$root/$path" branch)"
+  short="${release%% *}"
+  [[ -n "$short" && -n "$version" ]] || { bad "não consegui ler a versão em $root/$path" >&2; return 1; }
+
+  if moodle_is_release "$short"; then
+    printf 'MOODLE_VERSION=%s\nMOODLE_COMMIT=\n' "$short"
+    return 0
+  fi
+
+  [[ -n "$branch" ]] || { bad "o version.php não informa a branch do Moodle" >&2; return 1; }
+  info "Moodle $release é uma build fora de release — procurando o commit no GitHub" >&2
+  commit="$(moodle_find_commit "$path" "$version" "$release" "$branch")" || {
+    bad "não achei no GitHub o commit do Moodle $release (version $version)" >&2
+    hint "um núcleo com alterações locais não tem commit igual; fixe uma release, ex: MOODLE_VERSION=\"${short%%[!0-9.]*}\"" >&2
+    return 1
+  }
+  printf 'MOODLE_VERSION=%s\nMOODLE_COMMIT=%s\n' "$short" "$commit"
+}
+
 branch_for_moodle() {
   printf '%s\n' "${MOODLE_BRANCH:-503}"
 }
 
-recipe_install() {
-  local dir="$1" name="$2" database="$3" branch tarball
-  local version="${MOODLE_VERSION:-}"
-  if [[ -n "$version" ]]; then
-    tarball="$(download "$(url_for moodle "$version")" "$(cache_name moodle "$version")")"
+# Release é o número sem sufixo (5.3, 5.3.1): o pacote dela nunca muda. Build
+# semanal (5.3.1+) e versão em desenvolvimento (5.4dev) só se reproduzem pelo
+# commit do git, em MOODLE_COMMIT.
+moodle_is_release() { [[ "$1" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; }
+
+# O pacote do Moodle: o commit fixado, a release fixada ou, sem nada no
+# dev.conf, a build mais recente da branch padrão.
+moodle_tarball() {
+  local version="${MOODLE_VERSION:-}" commit="${MOODLE_COMMIT:-}" branch
+  if [[ -n "$commit" ]]; then
+    [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || die "MOODLE_COMMIT no dev.conf não é um commit do git: $commit"
+    download "$(url_for moodlegit "$commit")" "$(cache_name moodlegit "$commit")"
+  elif [[ -n "$version" ]]; then
+    moodle_is_release "$version" || die "MOODLE_VERSION=\"$version\" não é uma release e o dev.conf não traz o MOODLE_COMMIT dela
+     rode $DEV pin onde este Moodle está instalado, ou fixe uma release (ex: 5.3.1)"
+    download "$(url_for moodle "$version")" "$(cache_name moodle "$version")"
   else
     branch="$(branch_for_moodle)"
-    tarball="$(download_fresh "$(url_for moodle "latest-$branch")" "$(cache_name moodle "latest-$branch")")"
+    download_fresh "$(url_for moodle "latest-$branch")" "$(cache_name moodle "latest-$branch")"
   fi
+}
+
+recipe_install() {
+  local dir="$1" name="$2" database="$3" tarball
+  # O motivo já foi dito por moodle_tarball; o dev para aqui, como no die.
+  tarball="$(moodle_tarball)" || exit 1
 
   mkdir -p "$dir/app" "$dir/data"
   chmod 0750 "$dir/data"
-  info "extraindo Moodle ${version:-(branch ${branch:-503})}"
+  if [[ -n "${MOODLE_COMMIT:-}" ]]; then
+    info "extraindo Moodle ${MOODLE_VERSION:-} (commit ${MOODLE_COMMIT:0:12})"
+  else
+    info "extraindo Moodle ${MOODLE_VERSION:-(branch $(branch_for_moodle))}"
+  fi
   tar -xf "$tarball" -C "$dir/app" --strip-components=1 --skip-old-files
 
   local root="$dir/app"
@@ -184,6 +311,13 @@ recipe_gitignore() {
 !/dev.conf
 !/dev.schedule
 !/dev.workers
+!/.mcp.json
+!/.claude/
+/.claude/settings.local.json
+!/CLAUDE.md
+/CLAUDE.local.md
+/.claude/skills/impeccable/scripts/bin/
+!/.specs/
 
 *:Zone.Identifier
 Thumbs.db

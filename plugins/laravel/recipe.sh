@@ -12,6 +12,17 @@ recipe_version() {
   sed -n "/const VERSION = '/{s/.*const VERSION = '\([^']*\)'.*/\1/p;q;}" "$file"
 }
 
+# O Laravel não ganha chave no dev.conf: quem fixa a versão é o composer.lock,
+# que o composer install do dev up respeita.
+recipe_pin() {
+  if [[ -f "$1/composer.lock" ]]; then
+    info "o Laravel é fixado pelo composer.lock — mantenha-o no git" >&2
+  else
+    warn "não há composer.lock: sem ele, cada composer install pode trazer versões diferentes" >&2
+    hint "o $DEV exec composer install o gera; depois faça commit dele" >&2
+  fi
+}
+
 setup_database_env() {
   local database="$1"
   [[ -n "$database" ]] || return 0

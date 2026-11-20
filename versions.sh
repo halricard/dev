@@ -17,9 +17,9 @@ MKCERT_VERSION="1.4.4"       # https://github.com/FiloSottile/mkcert/releases
 
 # Versões de ferramentas e instaladores usados pelos plugins
 WPCLI_VERSION="2.12.0"       # Plugin WordPress; https://github.com/wp-cli/wp-cli/releases
-WORDPRESS_VERSION=""         # Vazio = versão mais recente estável
-MOODLE_VERSION=""            # Vazio = branch estável mais recente
-MOODLE_BRANCH="503"          # Branch base de busca do Moodle (Moodle 5.3)
+# A versão do WordPress e a do Moodle são de cada projeto: o dev new e o dev up
+# as gravam no dev.conf (WORDPRESS_VERSION, MOODLE_VERSION e MOODLE_COMMIT).
+MOODLE_BRANCH="503"          # Branch dos projetos Moodle novos (Moodle 5.3)
 LARAVEL_INSTALLER="5.32.0"   # Plugin Laravel; instalador oficial via Composer
 
 # Navegador de testes e do Claude Code, instalado sob demanda (dev browser install).

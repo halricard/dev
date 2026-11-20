@@ -44,6 +44,19 @@ O site estará disponível imediatamente em `https://meu-blog.localhost`.
    - `dev logs` (visualiza erros PHP sem ruído de depreciações)
    - `dev down` (encerra ao fim do dia)
 
+### O mesmo Moodle ou WordPress para todo o time
+
+O `dev.conf` vai para o git e fixa a versão da aplicação. Quem clona o repositório roda só `dev up`: sem o núcleo no disco, o dev baixa exatamente a versão fixada.
+
+```bash
+WORDPRESS_VERSION="6.8.3"     # WordPress: a versão publicada
+MOODLE_VERSION="5.3.1"        # Moodle numa release
+MOODLE_VERSION="5.3.1+"       # Moodle numa build semanal...
+MOODLE_COMMIT="1156a935…"     # ...e o commit do github.com/moodle/moodle com o mesmo código
+```
+
+O `dev new` grava a versão ao criar o projeto, e o `dev up` a grava num projeto que ainda não a tem. Depois de atualizar a aplicação, `dev pin` regrava. A build semanal do Moodle não tem pacote permanente em download.moodle.org; o `dev pin` acha no GitHub o commit cujo `version.php` tem o mesmo `$version` e `$release` do instalado. No Laravel quem fixa é o `composer.lock`, que deve estar no git.
+
 ### Laravel
 
 1. **Instalar plugin**: `dev plugin install laravel`
@@ -115,6 +128,16 @@ A skill descreve só as ferramentas presentes no projeto, cada uma com as fases 
 
 Nenhum arquivo gravado no projeto leva senha, chave, token ou caminho da máquina, então todos podem ir para o git. Os servidores `dev-playwright`, `dev-context7` e `github` só chamam `dev browser mcp <projeto>`, `dev context7 mcp` e `dev agent mcp github`; o dev entrega as chaves por variável de ambiente.
 
+O `.gitignore` do projeto leva para o git o que é do time (`.mcp.json`, `.claude/`, `CLAUDE.md` e as especificações do TLC em `.specs/`) e deixa de fora o que é pessoal: `.claude/settings.local.json` (as permissões que você aprovou no Claude Code) e `CLAUDE.local.md`. O binário do impeccable (`.claude/skills/impeccable/scripts/bin/`, 23 MB por sistema) também fica fora: a skill o baixa e confere na primeira execução. Projetos novos já nascem assim; num projeto antigo, o `dev agent add` e o `dev agent update` acrescentam as linhas que faltam e avisam se um arquivo pessoal já estiver no git.
+
+Quem clona um projeto com Claude Code prepara a própria máquina:
+
+```bash
+dev up                           # avisa se o projeto usa ferramentas que esta máquina não tem
+dev agent update                 # instala o Chrome, o Playwright MCP, o Context7 MCP e o mcp-remote que o .mcp.json pede
+dev agent key github             # as chaves são de cada pessoa e nunca vão para o git
+```
+
 As chaves ficam num lugar só, `~/.dev/config` (permissão 600):
 
 ```bash
@@ -148,6 +171,7 @@ dev new                 cria um projeto novo já instalado e no ar
 dev up                  põe este projeto no ar: banco, vhost, agenda e workers
 dev down                tira do ar; arquivos e banco ficam
 dev init                escreve dev.conf num projeto existente
+dev pin                 fixa no dev.conf a versão instalada da aplicação, para quem clonar
 dev destroy             apaga projeto, banco e snapshots
 dev sites               lista o que está sendo servido
 dev exec                roda comando com php, node, composer do projeto

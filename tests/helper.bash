@@ -17,6 +17,8 @@ setup() {
   export DEV_CACHE="$BATS_TEST_TMPDIR/cache"
   export NO_COLOR=1
   unset DEV_YES
+  # As chaves do terminal de quem roda os testes não entram no sandbox.
+  unset CONTEXT7_API_KEY GITHUB_PAT PENPOT_MCP_KEY PENPOT_URL
   TEST_PROJECT="$BATS_TEST_TMPDIR/project"
   mkdir -p "$HOME" "$DEV_HOME" "$TEST_PROJECT"
   STUBS_BIN="$BATS_TEST_TMPDIR/bin"

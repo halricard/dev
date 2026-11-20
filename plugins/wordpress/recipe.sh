@@ -20,6 +20,22 @@ recipe_version() {
   sed -n "/^\$wp_version *= *'/{s/^\$wp_version *= *'\([^']*\)'.*/\1/p;q;}" "$dir/$core/wp-includes/version.php"
 }
 
+# Toda versão publicada do WordPress tem pacote próprio em wordpress.org, que
+# nunca muda; a nightly (6.9-alpha-…) não tem, e por isso não se fixa.
+recipe_pin_key() { printf 'WORDPRESS_VERSION\n'; }
+
+recipe_pin() {
+  local version
+  version="$(recipe_version "$1" 2>/dev/null || true)"
+  [[ -n "$version" ]] || { bad "não achei o núcleo do WordPress (wp-includes/version.php)" >&2; return 1; }
+  if [[ "$version" == *alpha* || "$version" == *-src ]]; then
+    bad "o WordPress $version é uma nightly, sem pacote para baixar de novo" >&2
+    hint "atualize para uma versão publicada: $DEV exec wp core update --version=<versão> --force" >&2
+    return 1
+  fi
+  printf 'WORDPRESS_VERSION=%s\n' "$version"
+}
+
 wp_config_file() {
   local dir="$1" candidate
   for candidate in wp-config.php "${PROJECT_DOCROOT:-.}/wp-config.php" public/wp-config.php \
@@ -159,6 +175,13 @@ recipe_gitignore() {
 !/dev.conf
 !/dev.schedule
 !/dev.workers
+!/.mcp.json
+!/.claude/
+/.claude/settings.local.json
+!/CLAUDE.md
+/CLAUDE.local.md
+/.claude/skills/impeccable/scripts/bin/
+!/.specs/
 
 *:Zone.Identifier
 Thumbs.db

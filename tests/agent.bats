@@ -545,3 +545,135 @@ skill() { printf '%s\n' "$TEST_PROJECT/.claude/skills/dev/SKILL.md"; }
   [ "${lines[0]}" = "6.8.3" ]
   [ "${lines[1]}" = "5.1.1+" ]
 }
+
+# ------------------------------------------------- .gitignore e outra máquina
+dev_gitignore() { in_project 'load_recipe moodle; recipe_gitignore > .gitignore'; }
+
+@test "agent add libera no .gitignore do dev os arquivos do time e deixa os pessoais de fora" {
+  project_conf APP=wordpress
+  printf '/*\n!/.gitignore\n!/dev.conf\n' > "$TEST_PROJECT/.gitignore"
+  run agent 'cmd_agent add'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *".gitignore  passa a versionar .mcp.json .claude/ CLAUDE.md .specs/"* ]]
+  # O /* já ignora o CLAUDE.local.md; o settings.local.json voltaria com o .claude/.
+  [[ "$output" == *"deixa de fora o que é pessoal: .claude/settings.local.json"* ]]
+  ! grep -qxF '/CLAUDE.local.md' "$TEST_PROJECT/.gitignore"
+  grep -qxF '!/.claude/' "$TEST_PROJECT/.gitignore"
+  grep -qxF '/.claude/settings.local.json' "$TEST_PROJECT/.gitignore"
+  grep -qxF '/.claude/skills/impeccable/scripts/bin/' "$TEST_PROJECT/.gitignore"
+  [[ "$output" == *"deixa de fora o que cada máquina baixa: .claude/skills/impeccable/scripts/bin/"* ]]
+  [ "$(grep -n '!/.claude/' "$TEST_PROJECT/.gitignore" | cut -d: -f1)" -lt \
+    "$(grep -n '/.claude/settings.local.json' "$TEST_PROJECT/.gitignore" | cut -d: -f1)" ]
+
+  local before; before="$(cat "$TEST_PROJECT/.gitignore")"
+  run agent 'cmd_agent add'
+  [ "$(cat "$TEST_PROJECT/.gitignore")" = "$before" ]
+  [[ "$output" != *"passa a versionar"* ]]
+}
+
+@test "o git versiona o que o dev agent libera e ignora o que é pessoal" {
+  command -v git >/dev/null || skip "sem git"
+  project_conf APP=moodle
+  dev_gitignore
+  git -C "$TEST_PROJECT" init -q
+  mkdir -p "$TEST_PROJECT/.claude/skills/dev" "$TEST_PROJECT/.specs"
+  touch "$TEST_PROJECT/.mcp.json" "$TEST_PROJECT/CLAUDE.md" "$TEST_PROJECT/CLAUDE.local.md" \
+        "$TEST_PROJECT/.claude/settings.local.json" "$TEST_PROJECT/.specs/spec.md"
+  run agent 'load_project; agent_gitignore'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  local path
+  for path in .mcp.json CLAUDE.md .claude/skills/dev/SKILL.md .specs/spec.md; do
+    ! git -C "$TEST_PROJECT" check-ignore -q "$path"
+  done
+  for path in .claude/settings.local.json CLAUDE.local.md data/x .claude/skills/impeccable/scripts/bin/linux-x64/impeccable; do
+    git -C "$TEST_PROJECT" check-ignore -q "$path"
+  done
+}
+
+@test "agent add no git acrescenta ao .gitignore antigo e aponta o arquivo pessoal já versionado" {
+  command -v git >/dev/null || skip "sem git"
+  project_conf APP=moodle
+  printf '/*\n!/.gitignore\n!/dev.conf\n' > "$TEST_PROJECT/.gitignore"
+  git -C "$TEST_PROJECT" init -q
+  mkdir -p "$TEST_PROJECT/.claude"
+  echo '{}' > "$TEST_PROJECT/.claude/settings.local.json"
+  git -C "$TEST_PROJECT" add -f .claude/settings.local.json
+  run agent 'cmd_agent add'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *".claude/settings.local.json não é do time, mas já está no git"* ]]
+  [[ "$output" == *"git rm -r --cached .claude/settings.local.json"* ]]
+  ! git -C "$TEST_PROJECT" check-ignore -q --no-index .mcp.json
+  git -C "$TEST_PROJECT" check-ignore -q --no-index .claude/settings.local.json
+}
+
+@test "agent add num .gitignore que não ignora a raiz só acrescenta os pessoais" {
+  project_conf APP=laravel
+  printf '/vendor\n.env\n' > "$TEST_PROJECT/.gitignore"
+  run agent 'cmd_agent add'
+  [ "$status" -eq 0 ]
+  ! grep -q '^!' "$TEST_PROJECT/.gitignore"
+  grep -qxF '/.claude/settings.local.json' "$TEST_PROJECT/.gitignore"
+  grep -qxF '/CLAUDE.local.md' "$TEST_PROJECT/.gitignore"
+}
+
+@test "agent add sem .gitignore não cria um" {
+  project_conf APP=wordpress
+  run agent 'cmd_agent add'
+  [ "$status" -eq 0 ]
+  [ ! -e "$TEST_PROJECT/.gitignore" ]
+}
+
+@test "agent update num clone instala nesta máquina o que o .mcp.json pede" {
+  command -v node >/dev/null || skip "sem node"
+  project_conf APP=wordpress
+  run agent 'cmd_agent add --playwright --context7 --github --figma'
+  run agent '
+    agent_machine_ready() { return 1; }
+    install_browser() { echo "instalou chrome"; }
+    install_playwright_mcp() { echo "instalou playwright"; }
+    install_context7_mcp() { echo "instalou context7"; }
+    install_mcp_remote() { echo "instalou mcp-remote"; }
+    cmd_agent update'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"FERRAMENTAS DO CLAUDE CODE NESTA MÁQUINA"* ]]
+  [[ "$output" == *"instalou chrome"*"instalou playwright"*"instalou context7"*"instalou mcp-remote"* ]]
+  [[ "$output" == *"GitHub: falta o token"* ]]
+
+  run agent 'agent_machine_ready() { return 0; }; cmd_agent update'
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"NESTA MÁQUINA"* ]]
+}
+
+@test "o aviso do dev up lista o que falta nesta máquina e cala quando está tudo pronto" {
+  command -v node >/dev/null || skip "sem node"
+  project_conf APP=wordpress
+  run agent 'cmd_agent add --playwright --github --penpot'
+  run agent '
+    load_project
+    agent_machine_ready() { [[ "$1" != playwright ]]; }
+    agent_machine_hint'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"usa Playwright, GitHub, Penpot"* ]]
+  [[ "$output" == *"dev agent update"* ]]
+
+  run agent '
+    load_project
+    agent_machine_ready() { return 0; }
+    key_value() { echo chave; }
+    agent_machine_hint'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "o .gitignore do projeto ignora o arquivo pessoal mesmo que o git global já o ignore" {
+  command -v git >/dev/null || skip "sem git"
+  project_conf APP=moodle
+  printf '/*\n!/.gitignore\n!/dev.conf\n' > "$TEST_PROJECT/.gitignore"
+  mkdir -p "$HOME/.config/git"
+  printf '**/.claude/settings.local.json\n' > "$HOME/.config/git/ignore"
+  git -C "$TEST_PROJECT" init -q
+  run agent 'cmd_agent add'
+  [ "$status" -eq 0 ]
+  grep -qxF '/.claude/settings.local.json' "$TEST_PROJECT/.gitignore"
+}

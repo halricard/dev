@@ -35,6 +35,12 @@ cmd_up() {
       hint "$DEV worker   mostra o estado dos workers"
     fi
   fi
+  # Num clone, o .mcp.json chega pelo git antes das ferramentas desta máquina.
+  if [[ -f "$PROJECT_DIR/.mcp.json" ]]; then
+    # shellcheck source=lib/agent.sh
+    source "$DEV_ROOT/lib/agent.sh"
+    agent_machine_hint || true
+  fi
   hint "$DEV down     tira do ar — arquivos e banco continuam"
   blank
 }

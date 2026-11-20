@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Gerenciamento de projetos: ciclo de vida, vhosts, adoção e execução isolada.
 
+# shellcheck source=lib/pin.sh
+source "$DEV_ROOT/lib/pin.sh"
+
 valid_name() { [[ "$1" =~ ^[a-z0-9][a-z0-9-]{0,40}$ ]]; }
 
 RESERVED_NAMES=(adminer db mailpit mail localhost plugin plugins)
@@ -298,6 +301,9 @@ cmd_new() {
     docroot="$(recipe_docroot "$dir")"
   fi
   write_project_conf "$dir" "$name" "$app" "$docroot" "$database" "$project_php"
+  if declare -F recipe_pin >/dev/null; then
+    pin_project "$dir" || warn "a versão não foi fixada no dev.conf; tente depois com: cd $name && $DEV pin"
+  fi
   write_gitignore "$dir"
 
   if declare -F recipe_schedule >/dev/null; then
@@ -363,8 +369,11 @@ bring_up() {
   fi
 
   if [[ -n "$PROJECT_APP" ]]; then
-    if load_recipe "$PROJECT_APP" && declare -F recipe_restore >/dev/null; then
-      recipe_restore "$PROJECT_DIR" "$PROJECT_NAME" "$PROJECT_DATABASE" || true
+    if load_recipe "$PROJECT_APP"; then
+      if declare -F recipe_restore >/dev/null; then
+        recipe_restore "$PROJECT_DIR" "$PROJECT_NAME" "$PROJECT_DATABASE" || true
+      fi
+      pin_if_missing "$PROJECT_DIR"
     fi
   fi
 

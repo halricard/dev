@@ -78,6 +78,7 @@ usage() {
     up                  põe este projeto no ar: banco, vhost, agenda e workers
     down [nome]         tira do ar; arquivos e banco ficam
     init                escreve dev.conf num projeto existente
+    pin                 fixa no dev.conf a versão instalada da aplicação, para quem clonar
     destroy <nome>      apaga projeto, banco e snapshots
     sites               lista o que está sendo servido
     exec <cmd…>         roda comando com php, node, composer do projeto
@@ -119,7 +120,7 @@ usage() {
                         --tlc         método spec-driven TLC (instalador oficial)
                         --all         todas as ferramentas, com o Figma e o TLC como padrões
     agent remove        remove a skill, os servidores MCP e o bloco do CLAUDE.md gerados pelo dev
-    agent update        regenera a skill depois de mudar o dev.conf, a aplicação ou as ferramentas
+    agent update        regenera a skill; num clone, instala nesta máquina o que o .mcp.json pede
     agent list          mostra a skill e as ferramentas instaladas no projeto
     agent key [nome]    grava a chave de uma ferramenta em ~/.dev/config: context7, github ou penpot (--remove apaga)
     context7            estado do Context7 MCP e da chave de API
@@ -180,6 +181,10 @@ case "$subcommand" in
   up|down)
     source "$DEV_ROOT/lib/updown.sh"
     "cmd_$subcommand" "$@"
+    ;;
+  pin)
+    source "$DEV_ROOT/lib/pin.sh"
+    cmd_pin "$@"
     ;;
   exec|shell)
     source "$DEV_ROOT/lib/project.sh"

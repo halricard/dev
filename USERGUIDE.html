@@ -153,6 +153,8 @@ th { background: var(--code); color: var(--fg); font-weight: 600; }
 <span class="pr">$</span> <span class="in">dev logs -e</span>
 <span class="pr">$</span> <span class="in">dev test behat --tags=@local_meuplugin</span>
 <span class="pr">$</span> <span class="in">dev down</span></div>
+
+  <p>Para outro desenvolvedor receber o mesmo Moodle ao clonar o repositório, veja <a href="#equipe">Projeto em equipe</a>.</p>
 </section>
 
 <section id="fluxo-laravel">
@@ -171,6 +173,7 @@ th { background: var(--code); color: var(--fg); font-weight: 600; }
 <span class="pr">$</span> <span class="in">dev exec php artisan migrate</span>
 <span class="pr">$</span> <span class="in">dev worker</span>
 <span class="pr">$</span> <span class="in">dev open mail</span></div>
+  <p>A versão do Laravel e dos pacotes é fixada pelo <code>composer.lock</code>, que vai para o git. Veja <a href="#equipe">Projeto em equipe</a>.</p>
 </section>
 
 <section id="fluxo-wordpress">
@@ -188,6 +191,7 @@ th { background: var(--code); color: var(--fg); font-weight: 600; }
 <span class="pr">$</span> <span class="in">dev exec wp plugin list</span>
 <span class="pr">$</span> <span class="in">dev snapshot antes-do-update</span>
 <span class="pr">$</span> <span class="in">dev restore antes-do-update</span></div>
+  <p>O <code>dev.conf</code> fixa a versão do WordPress (<code>WORDPRESS_VERSION</code>). Veja <a href="#equipe">Projeto em equipe</a>.</p>
 </section>
 
 <section id="testes">
@@ -332,15 +336,84 @@ th { background: var(--code); color: var(--fg); font-weight: 600; }
   <h3>impeccable e TLC</h3>
   <p>Os dois vêm dos instaladores oficiais (<code>npx impeccable install</code> e <code>npx @tech-leads-club/agent-skills install</code>), rodados com o Node do dev, sempre na versão atual: o dev não fixa a versão deles. Os instaladores rodam sem perguntas, só para o Claude Code, numa pasta temporária; só a skill e os subagentes que ela traz (<code>.claude/agents</code>) vêm para o projeto. Assim nada é gravado para outros agentes nem num repositório git acima do projeto. O impeccable entra sem os hooks do detector de design: a skill do dev diz em que fases usar cada comando dele. Com o TLC, o <code>CLAUDE.md</code> do projeto ganha um bloco marcado que manda o Claude Code carregar a skill do dev antes de cada fase; o resto do arquivo nunca é alterado. Só um método por projeto.</p>
   <p>Nenhum arquivo gravado no projeto leva senha, chave, token ou caminho da máquina, então todos podem ir para o git. O Claude Code pede aprovação antes de ativar os servidores do <code>.mcp.json</code>. O <code>dev agent remove</code> tira a skill, os servidores e o bloco do <code>CLAUDE.md</code> gerados pelo dev; o TLC e o impeccable continuam em <code>.claude/skills</code>.</p>
+
+  <p>Para outro desenvolvedor ter as mesmas ferramentas ao clonar o repositório, veja <a href="#equipe">Projeto em equipe</a>.</p>
+</section>
+
+<section id="equipe">
+  <h2>9. Projeto em equipe</h2>
+  <p>O repositório de um projeto leva tudo o que outro desenvolvedor precisa para ter o mesmo ambiente, como um <code>compose.yaml</code>: a versão da aplicação e do PHP no <code>dev.conf</code>, o código de vocês e a configuração do Claude Code. Quem clona roda <code>dev up</code> e recebe exatamente as mesmas versões. O banco não vai junto: cada um tem o seu, com o próprio admin.</p>
+
+  <h3>O que vai para o git</h3>
+  <table>
+    <tr><th>Arquivo</th><th>O que é</th><th>No git</th></tr>
+    <tr><td><code>dev.conf</code></td><td>O ambiente: aplicação e versão dela, PHP, Node, docroot e banco</td><td>sim</td></tr>
+    <tr><td><code>dev.schedule</code>, <code>dev.workers</code></td><td>Agenda e processos contínuos do projeto</td><td>sim</td></tr>
+    <tr><td>seu código</td><td>Temas e plugins, marcados com <code>dev track</code></td><td>sim</td></tr>
+    <tr><td><code>.mcp.json</code></td><td>Os servidores MCP do Claude Code, sem chave nem caminho da máquina</td><td>sim</td></tr>
+    <tr><td><code>.claude/</code></td><td>A skill do dev, o impeccable, o TLC e os subagentes</td><td>sim</td></tr>
+    <tr><td><code>CLAUDE.md</code></td><td>Instruções do projeto para o Claude Code</td><td>sim</td></tr>
+    <tr><td><code>.specs/</code></td><td>Especificações, designs e tarefas do método TLC</td><td>sim</td></tr>
+    <tr><td><code>.claude/settings.local.json</code></td><td>As permissões que você aprovou no Claude Code</td><td>não: é pessoal</td></tr>
+    <tr><td><code>CLAUDE.local.md</code></td><td>Suas notas pessoais para o Claude Code</td><td>não: é pessoal</td></tr>
+    <tr><td><code>.claude/skills/impeccable/scripts/bin/</code></td><td>O binário do impeccable, 23 MB por sistema</td><td>não: a skill o baixa e confere na primeira execução</td></tr>
+    <tr><td>núcleo da aplicação, <code>data/</code>, <code>vendor/</code></td><td>O que o dev baixa e o que a aplicação gera</td><td>não</td></tr>
+  </table>
+  <p>Projetos novos já nascem com esse <code>.gitignore</code>. Num projeto antigo, o <code>dev agent add</code> e o <code>dev agent update</code> acrescentam as linhas que faltam e avisam quando um arquivo pessoal já está no git. O <code>CLAUDE.md</code> e o <code>.specs/</code> são texto livre: o dev não grava segredo neles, mas o que você ou o Claude Code escreverem ali vai para o git. Senha não entra em arquivo versionado.</p>
+
+  <h3>A versão da aplicação</h3>
+  <table>
+    <tr><th>Aplicação</th><th>Quem fixa</th><th>Exemplo</th></tr>
+    <tr><td>WordPress</td><td><code>WORDPRESS_VERSION</code> no <code>dev.conf</code></td><td><code>WORDPRESS_VERSION="6.8.3"</code></td></tr>
+    <tr><td>Moodle numa release</td><td><code>MOODLE_VERSION</code></td><td><code>MOODLE_VERSION="5.3.1"</code></td></tr>
+    <tr><td>Moodle numa build semanal</td><td><code>MOODLE_VERSION</code> e <code>MOODLE_COMMIT</code></td><td><code>MOODLE_VERSION="5.3.1+"</code><br><code>MOODLE_COMMIT="1156a935…"</code></td></tr>
+    <tr><td>Laravel</td><td>o <code>composer.lock</code>, que o <code>composer install</code> do <code>dev up</code> respeita</td><td>—</td></tr>
+  </table>
+  <p>O Moodle publica dois tipos de pacote. A <b>release</b> (<code>5.3.1</code>) tem pacote próprio em download.moodle.org, que nunca muda. A <b>build semanal</b> (<code>5.3.1+</code>) é a release mais as correções da semana, e o pacote dela, <code>moodle-latest-503.tgz</code>, é substituído toda semana. Mas cada build semanal é um commit no github.com/moodle/moodle, e o dev fixa esse commit: ele procura o commit cujo <code>version.php</code> tem o mesmo <code>$version</code> e <code>$release</code> do instalado, e quem clona baixa o código desse commit.</p>
+  <p>O <code>dev new</code> grava a versão ao criar o projeto e o <code>dev up</code> a grava num projeto que ainda não a tem. Depois de atualizar a aplicação, rode <code>dev pin</code> e faça commit do <code>dev.conf</code>.</p>
+  <p class="scope project">no diretório do projeto</p>
+  <div class="term"><span class="pr">$</span> <span class="in">dev pin</span>
+<span class="out">  •  Moodle 5.3.1+ (Build: 20261117) é uma build fora de release — procurando o commit no GitHub
+  ✔  dev.conf  MOODLE_VERSION="5.3.1+"
+  ✔  dev.conf  MOODLE_COMMIT="1156a935ba440b114558984693d2b818a9e72e29"
+  →  faça commit do dev.conf: quem clonar recebe esta versão no dev up</span></div>
+  <ul>
+    <li>A busca do commit usa a API do GitHub, que aceita 60 consultas por hora sem login. Uma build semanal custa uma consulta.</li>
+    <li>Um núcleo do Moodle com alterações locais não tem commit igual no GitHub. Nesse caso, fixe a release em que ele se baseia, por exemplo <code>MOODLE_VERSION="5.3.1"</code>.</li>
+    <li>A nightly do WordPress (<code>6.9-alpha-…</code>) não tem pacote para baixar de novo e não é fixada.</li>
+    <li>O Moodle aceita subir de versão (<code>dev pin</code> de novo depois), mas recusa descer: quem trocar um dump do banco precisa de código igual ou mais novo.</li>
+  </ul>
+
+  <h3>Quem cria o projeto</h3>
+  <p class="scope project">no diretório do projeto</p>
+  <div class="term"><span class="pr">$</span> <span class="in">dev pin</span>
+<span class="pr">$</span> <span class="in">dev agent update</span>
+<span class="out">  ✔  .gitignore  passa a versionar .mcp.json .claude/ CLAUDE.md .specs/</span>
+<span class="pr">$</span> <span class="in">git add .gitignore dev.conf .mcp.json .claude CLAUDE.md .specs</span>
+<span class="pr">$</span> <span class="in">git commit -m "ambiente do projeto"</span></div>
+  <p>Se o <code>dev agent update</code> avisar que um arquivo pessoal já está no git, tire-o do índice sem apagar o arquivo: <code>git rm --cached .claude/settings.local.json</code>.</p>
+
+  <h3>Quem clona o projeto</h3>
+  <p class="scope project">no diretório do projeto</p>
+  <div class="term"><span class="pr">$</span> <span class="in">git clone &lt;repositório&gt; meu-ead &amp;&amp; cd meu-ead</span>
+<span class="pr">$</span> <span class="in">dev up</span>
+<span class="out">  •  o Claude Code deste projeto usa Playwright, GitHub, que esta máquina ainda não tem pronto
+  →  prepare com: dev agent update</span>
+<span class="pr">$</span> <span class="in">dev agent update</span>
+<span class="pr">$</span> <span class="in">dev agent key github</span>
+<span class="pr">$</span> <span class="in">dev agent key penpot</span></div>
+  <p>O <code>dev up</code> baixa a versão fixada da aplicação, cria o banco, instala a aplicação com o código do repositório já no lugar e mostra a senha do admin. O <code>dev agent update</code> instala nesta máquina o que o <code>.mcp.json</code> pede (o Chrome, o Playwright MCP, o Context7 MCP e o mcp-remote) e lista as chaves que faltam. As chaves são de cada pessoa e ficam em <code>~/.dev/config</code>; depois da chave do Penpot, abra um terminal novo.</p>
+  <p>Quem já tinha o plugin da aplicação instalado antes de atualizar o dev roda também <code>dev plugin update &lt;app&gt;</code>: o dev usa a cópia instalada da receita, e uma cópia antiga não conhece a versão fixada. O <code>dev up</code> e o <code>dev pin</code> avisam quando é o caso.</p>
 </section>
 
 <section id="tabela-comandos">
-  <h2>9. Tabela Completa de Comandos do Projeto</h2>
+  <h2>10. Tabela Completa de Comandos do Projeto</h2>
   <table>
     <tr><th>Comando</th><th>Onde Rodar</th><th>Descrição</th></tr>
     <tr><td><code>dev up</code></td><td>Projeto</td><td>Coloca o projeto no ar com banco, vhost, agenda e workers</td></tr>
     <tr><td><code>dev down</code></td><td>Projeto</td><td>Tira o site do ar preservando arquivos e banco</td></tr>
     <tr><td><code>dev init</code></td><td>Projeto</td><td>Gera o arquivo <code>dev.conf</code> para um projeto existente</td></tr>
+    <tr><td><code>dev pin</code></td><td>Projeto</td><td>Grava no <code>dev.conf</code> a versão instalada do WordPress ou do Moodle (com o commit, numa build semanal), para quem clonar receber a mesma no <code>dev up</code></td></tr>
     <tr><td><code>dev destroy &lt;nome&gt;</code></td><td>Máquina</td><td>Apaga completamente o projeto, banco e snapshots</td></tr>
     <tr><td><code>dev sites</code></td><td>Máquina</td><td>Lista todos os projetos registrados e seus domínios</td></tr>
     <tr><td><code>dev exec &lt;cmd&gt;</code></td><td>Projeto</td><td>Executa comando no ambiente isolado (PHP, Node, Composer)</td></tr>
@@ -361,7 +434,7 @@ th { background: var(--code); color: var(--fg); font-weight: 600; }
     <tr><td><code>dev passwd</code></td><td>Projeto</td><td>Redefine com segurança a senha do administrador da aplicação</td></tr>
     <tr><td><code>dev open [mail|db]</code></td><td>Projeto</td><td>Abre o site no navegador, ou as ferramentas Mailpit / Adminer</td></tr>
     <tr><td><code>dev agent add</code></td><td>Projeto</td><td>Gera a skill do dev para o Claude Code; ferramentas opcionais: <code>--playwright</code>, <code>--context7</code>, <code>--figma</code>, <code>--github</code>, <code>--impeccable</code>, <code>--tlc</code> ou <code>--all</code></td></tr>
-    <tr><td><code>dev agent remove|update|list</code></td><td>Projeto</td><td>Remove a skill, os servidores e o bloco do <code>CLAUDE.md</code> gerados pelo dev, regenera a skill após mudar o <code>dev.conf</code>, a aplicação ou as ferramentas, ou mostra o que está instalado</td></tr>
+    <tr><td><code>dev agent remove|update|list</code></td><td>Projeto</td><td>Remove a skill, os servidores e o bloco do <code>CLAUDE.md</code> gerados pelo dev, regenera a skill após mudar o <code>dev.conf</code>, a aplicação ou as ferramentas (e, num clone, instala nesta máquina o que o <code>.mcp.json</code> pede), ou mostra o que está instalado</td></tr>
     <tr><td><code>dev test [suíte] [args]</code></td><td>Projeto</td><td>Lista as suítes de teste da aplicação ou roda uma, preparando-a na primeira vez</td></tr>
     <tr><td><code>dev test init &lt;suíte&gt;</code></td><td>Projeto</td><td>Prepara a suíte de novo, depois de atualizar a aplicação</td></tr>
     <tr><td><code>dev test user</code></td><td>Projeto</td><td>Cria o usuário de teste temporário (<code>--no-admin</code>, <code>--remove</code>)</td></tr>
